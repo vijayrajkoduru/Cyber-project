@@ -12,7 +12,63 @@ export const getApiUrl = () => {
   if (port === "" || port === "80" || port === "443") return "";
   return `http://${window.location.hostname}:8000`;
 };
-export const getAuthToken = () => localStorage.getItem("cyberToken") || "";
+// ─── SESSION-COOKIE-V1 ───────────────────────────────────────────────
+// The JWT is no longer stored in (or readable from) JavaScript: the backend
+// sets it as an HttpOnly, SameSite=Strict cookie (vl_session, Path=/api) on
+// login. `token` in React state is now only this non-secret sentinel meaning
+// "a cookie session exists"; legacy `Authorization: Bearer ${token}` headers
+// built from it are stripped by the fetch shim below, which also sends
+// credentials and the double-submit CSRF header (X-CSRF-Token == vl_csrf
+// cookie) on state-changing requests to our own API.
+export const VL_SESSION = "__vl_cookie_session__";
+export const getAuthToken = () => "";
+let _vlCsrfMem = "";
+export function vlSetCsrf(t) { if (t) _vlCsrfMem = String(t); }
+export function vlCsrfToken() {
+  try {
+    const m = (document.cookie || "").match(/(?:^|;\s*)vl_csrf=([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
+  } catch (_) {}
+  return _vlCsrfMem;
+}
+function _vlIsOwnApi(url) {
+  try {
+    const u = new URL(url, window.location.href);
+    if (!u.pathname.startsWith("/api/")) return false;
+    if (u.origin === window.location.origin) return true;
+    const base = getApiUrl();
+    return !!base && new URL(base, window.location.href).origin === u.origin;
+  } catch (_) { return false; }
+}
+(function installVlSessionFetch() {
+  if (typeof window === "undefined" || !window.fetch || window.__vlSessionFetch) return;
+  window.__vlSessionFetch = true;
+  // Purge the JWT a previous build left in localStorage (XSS-exfiltratable).
+  try { localStorage.removeItem("cyberToken"); } catch (_) {}
+  const _orig = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    try {
+      const isReq = typeof Request !== "undefined" && input instanceof Request;
+      const url = typeof input === "string" ? input : (input && input.url) || String(input);
+      if (!_vlIsOwnApi(url)) return _orig(input, init);
+      const o = Object.assign({}, init || {});
+      const h = new Headers(o.headers || (isReq ? input.headers : undefined));
+      const a = h.get("Authorization");
+      if (a !== null && /^bearer\s*(null|undefined|__vl_cookie_session__)?\s*$/i.test(a.trim())) h.delete("Authorization");
+      h.set("X-VL-Session", "cookie");
+      const method = String(o.method || (isReq ? input.method : "GET")).toUpperCase();
+      if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && !h.has("X-CSRF-Token")) {
+        const t = vlCsrfToken();
+        if (t) h.set("X-CSRF-Token", t);
+      }
+      o.headers = h;
+      o.credentials = "include";
+      return _orig(input, o);
+    } catch (_) {
+      return _orig(input, init);
+    }
+  };
+})();
 const API = getApiUrl();
 
 // ─── COMPLIANCE_MAP — CWE -> 8 compliance framework controls ───────────
@@ -63,6 +119,239 @@ const COMPLIANCE_FRAMEWORKS = [
 const _pdfFn = t => (t||"target").replace(/https?:\/\//,"").replace(/[^a-zA-Z0-9.\-]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"");
 const _pdfDt = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`; };
 
+// ─── CVSS-CALC-V1: shared CVSS v3.1 base-score calculator ──────────────
+// Every report generator routes CVSS through vlCvssFor()/vlNormalizeFindingCvss()
+// so the displayed vector, the displayed score and the severity label always
+// agree. Formula + Roundup per FIRST CVSS v3.1 spec §7.1 / Appendix A.
+const _CVSS31_W = {
+  AV: {N:0.85, A:0.62, L:0.55, P:0.2},
+  AC: {L:0.77, H:0.44},
+  PR_U: {N:0.85, L:0.62, H:0.27},
+  PR_C: {N:0.85, L:0.68, H:0.5},
+  UI: {N:0.85, R:0.62},
+  CIA: {H:0.56, L:0.22, N:0},
+};
+function cvss31Roundup(x) {
+  const i = Math.round(x * 100000);
+  return (i % 10000 === 0) ? i / 100000 : (Math.floor(i / 10000) + 1) / 10.0;
+}
+const _CVSS_VEC_RE = /(?:CVSS:3\.[01]\/)?AV:[NALP]\/AC:[LH]\/PR:[NLH]\/UI:[NR]\/S:[UC]\/C:[NLH]\/I:[NLH]\/A:[NLH]/;
+function cvss31Parse(vec) {
+  const m = String(vec || "").match(_CVSS_VEC_RE);
+  if (!m) return null;
+  const out = {};
+  m[0].replace(/^CVSS:3\.[01]\//, "").split("/").forEach(p => { const [k, v] = p.split(":"); out[k] = v; });
+  return out;
+}
+// Returns the CVSS v3.1 base score (0.0-10.0) or null when the vector is invalid.
+function cvss31BaseScore(vec) {
+  const m = cvss31Parse(vec);
+  if (!m) return null;
+  const W = _CVSS31_W;
+  const changed = m.S === "C";
+  const iss = 1 - ((1 - W.CIA[m.C]) * (1 - W.CIA[m.I]) * (1 - W.CIA[m.A]));
+  const impact = changed ? (7.52 * (iss - 0.029) - 3.25 * Math.pow(iss - 0.02, 15)) : (6.42 * iss);
+  const expl = 8.22 * W.AV[m.AV] * W.AC[m.AC] * (changed ? W.PR_C : W.PR_U)[m.PR] * W.UI[m.UI];
+  if (impact <= 0) return 0;
+  return changed ? cvss31Roundup(Math.min(1.08 * (impact + expl), 10))
+                 : cvss31Roundup(Math.min(impact + expl, 10));
+}
+// Qualitative rating per spec Table 14. 0.0 => INFO ("None").
+function cvss31Severity(score) {
+  const s = Number(score) || 0;
+  if (s >= 9.0) return "CRITICAL";
+  if (s >= 7.0) return "HIGH";
+  if (s >= 4.0) return "MEDIUM";
+  if (s >= 0.1) return "LOW";
+  return "INFO";
+}
+// Severity-band templates, used ONLY when a finding carries neither its own
+// vector nor a source score. Unauthenticated findings get PR:N; PR:L is used
+// only when the finding came from an authenticated scan/session. Each
+// template's computed score stays inside its severity band.
+const _CVSS_TPL = {
+  unauth: {
+    CRITICAL: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",   // 9.8
+    HIGH:     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",   // 7.5
+    MEDIUM:   "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",   // 5.3
+    LOW:      "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",   // 3.1
+  },
+  auth: {
+    CRITICAL: "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",   // 9.9
+    HIGH:     "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",   // 8.1
+    MEDIUM:   "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N",   // 5.4
+    LOW:      "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:L/I:N/A:N",   // 3.1
+  },
+};
+function vlCvssTemplate(sev, authenticated) {
+  return (_CVSS_TPL[authenticated ? "auth" : "unauth"][String(sev || "").toUpperCase()]) || "";
+}
+// Pull a finding's OWN vector: explicit field first, then any vector quoted
+// in its evidence/detail text. Never returns a template.
+function vlFindingCvssVector(f) {
+  if (!f) return "";
+  if (f.cvss_source === "template") return "";
+  const cands = [f.cvss_vector, f.cvssVector, f.vector,
+                 [f.name, f.detail, f.title, f.evidence, f.evidence_marker].map(x => String(x || "")).join(" ")];
+  for (const c of cands) {
+    const m = String(c || "").match(_CVSS_VEC_RE);
+    if (m) return /^CVSS:/.test(m[0]) ? m[0] : "CVSS:3.1/" + m[0];
+  }
+  return "";
+}
+// Single source of truth for a finding's CVSS.
+//   1. own vector         -> score computed from it            (source "finding")
+//   2. source score only  -> that score, no vector fabricated  (source "score")
+//   3. neither            -> severity template (PR by auth ctx) (source "template")
+// severity is always the CVSS qualitative rating of the returned score
+// (INFO / POSITIVE / unscored findings keep their label).
+function vlCvssFor(f, authenticated) {
+  const sevIn = String((f && f.severity) || "INFO").toUpperCase();
+  if (sevIn === "POSITIVE") return {vector: "", score: 0, severity: sevIn, source: "none"};
+  const authed = !!(authenticated || (f && (f.authenticated === true || f._authenticated === true)));
+  const own = vlFindingCvssVector(f);
+  if (own) {
+    const s = cvss31BaseScore(own);
+    if (s != null) return {vector: own, score: s, severity: cvss31Severity(s), source: "finding"};
+  }
+  if (sevIn === "INFO") return {vector: "", score: 0, severity: "INFO", source: "none"};
+  const num = parseFloat(f && f.cvss);
+  if (f && f.cvss_source !== "template" && isFinite(num) && num > 0 && num <= 10) {
+    return {vector: "", score: Math.round(num * 10) / 10, severity: cvss31Severity(num), source: "score"};
+  }
+  const tpl = vlCvssTemplate(sevIn, authed);
+  if (tpl) {
+    const s = cvss31BaseScore(tpl);
+    return {vector: tpl, score: s, severity: cvss31Severity(s), source: "template"};
+  }
+  return {vector: "", score: 0, severity: sevIn, source: "none"};
+}
+// Returns a shallow COPY of f with cvss / cvss_vector / cvss_source / severity
+// made mutually consistent. Idempotent. Never mutates the input (React state).
+function vlNormalizeFindingCvss(f, authenticated) {
+  if (!f || typeof f !== "object" || f._vlCvss) return f;
+  const c = vlCvssFor(f, authenticated);
+  const g = Object.assign({}, f);
+  g._vlCvss = true;
+  if (g.severity != null && String(g.severity).toUpperCase() !== c.severity) g.severity_original = g.severity;
+  g.severity = c.severity;
+  g.cvss = c.score > 0 ? c.score.toFixed(1) : (c.source === "none" ? (g.cvss && Number(g.cvss) > 0 ? g.cvss : "") : "0.0");
+  if (c.source === "none" && (c.severity === "INFO" || c.severity === "POSITIVE")) g.cvss = "";
+  g.cvss_vector = c.vector;
+  g.cvss_source = c.source;
+  return g;
+}
+// Display label for the vector line: template vectors are marked as estimates.
+function vlCvssVectorLabel(f) {
+  if (!f || !f.cvss_vector) return "";
+  return f.cvss_vector + (f.cvss_source === "template" ? " (est.)" : "");
+}
+// ─── OWASP-MAP-V1: single finding -> OWASP Top 10 (2021) category source ───
+// Used by BOTH the OWASP Top 10 grid and the per-finding compliance mapping
+// so the two sections can never disagree about which category a finding is in.
+const VL_CWE_TO_OWASP = {
+  "CWE-22":"A01","CWE-23":"A01","CWE-284":"A01","CWE-285":"A01","CWE-639":"A01","CWE-862":"A01","CWE-863":"A01","CWE-538":"A01","CWE-200":"A01","CWE-601":"A01",
+  "CWE-261":"A02","CWE-296":"A02","CWE-310":"A02","CWE-319":"A02","CWE-321":"A02","CWE-322":"A02","CWE-323":"A02","CWE-324":"A02","CWE-325":"A02","CWE-326":"A02","CWE-327":"A02","CWE-328":"A02","CWE-329":"A02","CWE-330":"A02","CWE-331":"A02","CWE-335":"A02","CWE-336":"A02","CWE-337":"A02","CWE-338":"A02","CWE-340":"A02","CWE-347":"A02","CWE-523":"A02","CWE-720":"A02","CWE-757":"A02","CWE-759":"A02","CWE-760":"A02","CWE-780":"A02","CWE-818":"A02","CWE-916":"A02",
+  "CWE-20":"A03","CWE-74":"A03","CWE-75":"A03","CWE-77":"A03","CWE-78":"A03","CWE-79":"A03","CWE-80":"A03","CWE-83":"A03","CWE-87":"A03","CWE-88":"A03","CWE-89":"A03","CWE-90":"A03","CWE-91":"A03","CWE-93":"A03","CWE-94":"A03","CWE-95":"A03","CWE-96":"A03","CWE-97":"A03","CWE-98":"A03","CWE-99":"A03","CWE-100":"A03","CWE-113":"A03","CWE-116":"A03","CWE-138":"A03","CWE-184":"A03","CWE-470":"A03","CWE-471":"A03","CWE-564":"A03","CWE-610":"A03","CWE-643":"A03","CWE-644":"A03","CWE-652":"A03","CWE-917":"A03","CWE-943":"A03",
+  "CWE-209":"A04","CWE-256":"A04","CWE-501":"A04","CWE-522":"A04","CWE-525":"A04","CWE-539":"A04","CWE-579":"A04","CWE-598":"A04","CWE-602":"A04","CWE-642":"A04","CWE-646":"A04","CWE-650":"A04","CWE-653":"A04","CWE-656":"A04","CWE-657":"A04","CWE-799":"A04","CWE-840":"A04","CWE-841":"A04",
+  "CWE-2":"A05","CWE-11":"A05","CWE-13":"A05","CWE-15":"A05","CWE-16":"A05","CWE-260":"A05","CWE-315":"A05","CWE-520":"A05","CWE-526":"A05","CWE-537":"A05","CWE-541":"A05","CWE-547":"A05","CWE-611":"A05","CWE-614":"A05","CWE-693":"A05","CWE-756":"A05","CWE-776":"A05","CWE-942":"A05","CWE-1004":"A05","CWE-1032":"A05","CWE-1021":"A05","CWE-1174":"A05","CWE-1275":"A05",
+  "CWE-937":"A06","CWE-1035":"A06","CWE-1104":"A06","CWE-1395":"A06",
+  "CWE-255":"A07","CWE-259":"A07","CWE-287":"A07","CWE-288":"A07","CWE-290":"A07","CWE-294":"A07","CWE-295":"A07","CWE-297":"A07","CWE-300":"A07","CWE-302":"A07","CWE-304":"A07","CWE-306":"A07","CWE-307":"A07","CWE-346":"A07","CWE-384":"A07","CWE-521":"A07","CWE-613":"A07","CWE-620":"A07","CWE-640":"A07","CWE-798":"A07",
+  "CWE-345":"A08","CWE-353":"A08","CWE-426":"A08","CWE-494":"A08","CWE-502":"A08","CWE-565":"A08","CWE-784":"A08","CWE-829":"A08","CWE-830":"A08","CWE-915":"A08",
+  "CWE-117":"A09","CWE-223":"A09","CWE-532":"A09","CWE-778":"A09",
+  "CWE-918":"A10",
+};
+const _VL_OWASP_NAME_RULES = [
+  [/ssrf|server-side request/i,                                                   "A10"],
+  [/xxe|xml external entity/i,                                                    "A05"],
+  [/sql.?injection|sqli\b|nosql|\bxss\b|cross-site script|command injection|cmd.?inj|\brce\b|remote code|ssti|template injection|ldap injection|xpath injection|crlf|header injection|code injection/i, "A03"],
+  [/idor|broken access|access control|path traversal|directory traversal|\blfi\b|\brfi\b|file inclusion|open redirect|\bcsrf\b|admin.?bypass|privilege escalation|forced browsing/i, "A01"],
+  [/deserial|subresource integrity|\bsri\b|unsigned|integrity check|supply.?chain|dependency confusion|typosquat/i, "A08"],
+  [/\bcve-\d{4}-\d+|outdated|end.?of.?life|\beol\b|vulnerable (?:component|version|library|package)|\bkev\b|known.?exploit|\bepss\b|unpatched/i, "A06"],
+  [/jwt|json web token|oauth|oidc|saml|session fixation|session|password|brute.?force|credential|default login|default cred|\bmfa\b|\b2fa\b|\botp\b|authentication|account lockout|user enumeration/i, "A07"],
+  [/hsts|\btls\b|\bssl\b|cipher|certificate|cleartext|unencrypted|plain.?text|weak hash|\bmd5\b|\bsha-?1\b|crypto/i, "A02"],
+  [/logging|monitoring|audit log/i,                                               "A09"],
+  [/header|\bcsp\b|frame-options|clickjack|cors|misconfig|exposed|disclos|directory listing|default page|debug|server version|banner|cookie|verbose error|stack trace/i, "A05"],
+];
+function vlOwaspCategoryFor(f) {
+  if (!f) return "";
+  const m = String(f.cwe || "").trim().toUpperCase().match(/CWE-\d+/);
+  if (m && VL_CWE_TO_OWASP[m[0]]) return VL_CWE_TO_OWASP[m[0]];
+  // Scanner-supplied OWASP tag ("A03:2021 - Injection") when there is no mapped CWE.
+  const t = String(f.owasp || "").toUpperCase().match(/\bA(\d{1,2})(?::2021)?\b/)
+         || String(f.references || "").toUpperCase().match(/OWASP\s+A(\d{1,2})\b/);
+  if (t && Number(t[1]) >= 1 && Number(t[1]) <= 10) return "A" + t[1].padStart(2, "0");
+  const blob = String(f.name || f.detail || f.title || "");
+  for (const [re, cat] of _VL_OWASP_NAME_RULES) if (re.test(blob)) return cat;
+  return "";
+}
+// Rewrite a compliance label so its "OWASP Axx" token is exactly the category
+// the OWASP grid counts the finding under (removed when there is none).
+function vlAlignOwaspLabel(label, cat) {
+  const parts = String(label || "").split(" - ").map(t => t.trim()).filter(Boolean)
+    .filter(t => !/^OWASP A\d{2}\b/.test(t));
+  if (cat) parts.unshift("OWASP " + cat);
+  return parts.join(" - ");
+}
+// ─── AUTH-SCOPE-V1: scan credentials are scoped to the target host ───
+// A stale bearer captured for one lab (e.g. a Juice Shop JWT) must never be
+// sent with a scan of a different target (e.g. DVWA) — it produced bogus
+// "JWT has no exp" findings on the wrong report. Stored auth is keyed by
+// target host; the UI reloads/clears it whenever the target host changes.
+const _VL_AUTH_KEY = "cyberAuthByHost";
+function vlAuthHost(t) {
+  const s = String(t || "").trim();
+  if (!s) return "";
+  try { return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : "http://" + s).host.toLowerCase(); }
+  catch (e) { return ""; }
+}
+function _vlAuthMap() {
+  try { return JSON.parse(localStorage.getItem(_VL_AUTH_KEY) || "{}") || {}; } catch (e) { return {}; }
+}
+function vlAuthLoad(target) {
+  const h = vlAuthHost(target);
+  const e = (h && _vlAuthMap()[h]) || {};
+  return {cookie: e.cookie || "", bearer: e.bearer || ""};
+}
+function vlAuthSave(target, cookie, bearer) {
+  const h = vlAuthHost(target);
+  if (!h) return;
+  try {
+    const m = _vlAuthMap();
+    if (!cookie && !bearer) delete m[h]; else m[h] = {cookie: cookie || "", bearer: bearer || ""};
+    localStorage.setItem(_VL_AUTH_KEY, JSON.stringify(m));
+    // Legacy unscoped keys are never read again; drop them so they can't leak.
+    localStorage.removeItem("cyberAuthCookie"); localStorage.removeItem("cyberAuthBearer");
+  } catch (e) {}
+}
+// ─── EVIDENCE-INTEGRITY-V1 ───
+// Placeholder/template strings that scanners or old UI code emit in place of
+// real captured evidence. Reports must never present these as evidence.
+const VL_NO_EVIDENCE = "No captured evidence";
+const _VL_EVIDENCE_PLACEHOLDER_RE = /^\s*(?:n\/?a|none|null|undefined|-+|\.\.\.|tbd|todo|placeholder|\(no evidence text provided\)|no evidence(?: captured| available| provided)?|evidence(?: not)? (?:available|captured|provided)|see (?:scanner|tool) output|see (?:above|details)|detected by [a-z0-9_ -]+|vulnerability detected(?: on target)?|[a-z0-9 ]+ detected on target|\[?scaffold[^\]]*\]?|scaffold pending implementation|<[^>]*evidence[^>]*>|\{\{[^}]*\}\}|example(?:\.com)? evidence|sample evidence|lorem ipsum.*)\s*\.?\s*$/i;
+function vlIsPlaceholderEvidence(s) {
+  const t = String(s == null ? "" : s).trim();
+  if (!t) return true;
+  return _VL_EVIDENCE_PLACEHOLDER_RE.test(t);
+}
+// Real evidence text for a finding, or "" when only placeholders exist.
+// Evidence identical to the finding title/detail is NOT evidence either.
+function vlRealEvidence(f) {
+  if (!f) return "";
+  const title = String(f.name || f.detail || f.title || "").trim().toLowerCase();
+  for (const c of [f.evidence, f.evidence_marker, f.proof, f.poc]) {
+    const t = String(c == null ? "" : (typeof c === "object" ? JSON.stringify(c) : c)).trim();
+    // Provenance suffixes added by the report de-dup are not evidence by themselves.
+    const core = t.replace(/\s*\[Also flagged by:[^\]]*\]/g, " ")
+                  .replace(/\s*\(rolled up from \d+ binaries:[^)]*\)/g, " ").trim();
+    if (!core || vlIsPlaceholderEvidence(core)) continue;
+    if (title && core.toLowerCase() === title) continue;
+    return t;
+  }
+  return "";
+}
+function vlEvidenceOrNone(f) { return vlRealEvidence(f) || VL_NO_EVIDENCE; }
+
 // ─── PRIVACY MODE: auto-clear scan data after every PDF download ───────
 (function installPrivacyAutoClear() {
   if (typeof window === "undefined" || window.__vlAutoClearInstalled) return;
@@ -72,7 +361,7 @@ const _pdfDt = () => { const d=new Date(); return `${d.getFullYear()}-${String(d
     const result = _origSave.apply(this, arguments);
     setTimeout(() => {
       try {
-        for (const key of ["cyberAuthCookie", "cyberAuthBearer", "cyberAuthBasic",
+        for (const key of ["cyberAuthCookie", "cyberAuthBearer", "cyberAuthBasic", "cyberAuthByHost",
                             "cyberLastTarget", "cyberLastLoginUrl"]) {
           localStorage.removeItem(key);
         }
@@ -93,6 +382,7 @@ const MODULES = [
   { id:"recon",     icon:"", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
   { id:"guide",     icon:"", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
   { id:"report",    icon:"", label:"Report Writing",                     cat:"tools",   free:true  },
+  { id:"engagements", icon:"", label:"Engagements / Target Profiles",    cat:"tools",   free:true  },
 
   // ── TRIAL ACCESS (free tier gets these) ─────────────────────
   { id:"vuln",      icon:"", label:"Vulnerability Scanning",             cat:"scan",    free:false, trial:true },
@@ -302,6 +592,113 @@ export function setAuthExpiredHandler(fn) { _onAuthExpired = fn; }
 // authorization before scanning a third party. The checkbox in the scan panel
 // writes these keys; the backend gate (verify_scan_authorization) rejects a
 // non-lab scan whose body lacks authorization_ack, and logs the consent.
+// ─── TARGET-PROFILE-UI-V1: CUSTOMER-mode engagement profile selection ────
+// The operator picks an engagement profile (Engagements / Target Profiles
+// module, or the selector in every scan panel). Only non-secret identifiers
+// are kept in localStorage; secrets live encrypted server-side. Every scan
+// body then carries profile_id (+ auth_role / auth_mode) and the backend
+// enforces scope, safety, time window and per-role login, and accepts the
+// profile's signed authorization record in place of authorization_ack.
+const _VL_PROFILE_KEY = "vlActiveProfile";
+const VL_UNAUTH_ROLE = "__unauthenticated__";
+function vlGetActiveProfile() {
+  try {
+    const p = JSON.parse(localStorage.getItem(_VL_PROFILE_KEY) || "null");
+    return p && p.id ? p : null;
+  } catch (_) { return null; }
+}
+function vlProfileSnapshot(p, role) {
+  if (!p) return null;
+  const a = p.authorization || {};
+  const st = p.authorization_status || {};
+  return {
+    id: p.id, name: p.name || "", role: role === undefined ? (p.default_role || "") : role,
+    roles: (p.auth_configs || []).map(r => r.role), default_role: p.default_role || "",
+    company: (p.reporting || {}).company_name || "",
+    has_logo: !!((p.reporting || {}).logo_path),
+    targets: (p.primary_targets || []).slice(0, 5),
+    auth_ok: !!st.ok, auth_reason: st.reason || "",
+    signer: a.signer_name || "", signer_company: a.signer_company || "", signed_date: a.signed_date || "",
+    destructive_allowed: !!((p.safety || {}).destructive_allowed),
+  };
+}
+function vlSetActiveProfile(snap) {
+  try {
+    if (snap && snap.id) localStorage.setItem(_VL_PROFILE_KEY, JSON.stringify(snap));
+    else localStorage.removeItem(_VL_PROFILE_KEY);
+  } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent("vl:profileChanged", {detail: snap || null})); } catch (_) {}
+}
+let _vlProfilesPromise = null;
+function vlFetchProfiles(force) {
+  if (force || !_vlProfilesPromise) {
+    _vlProfilesPromise = api("/api/profiles?limit=200", "GET", null, VL_SESSION)
+      .then(d => (d && d.profiles) || [])
+      .catch(e => { _vlProfilesPromise = null; throw e; });
+  }
+  return _vlProfilesPromise;
+}
+function vlProfilesChanged() {
+  _vlProfilesPromise = null;
+  try { window.dispatchEvent(new CustomEvent("vl:profilesListChanged")); } catch (_) {}
+}
+// Report branding: the profile used by the most recent scan (null = that scan
+// ran without a profile, so reports stay VulnusLab-branded).
+let _vlLastScanProfile = null;
+const _vlLogoCache = {};
+function vlLoadProfileLogo(id, force) {
+  if (!id) return Promise.resolve(null);
+  if (_vlLogoCache[id] && !force) return Promise.resolve(_vlLogoCache[id]);
+  return fetch(API + "/api/profiles/" + encodeURIComponent(id) + "/logo", {credentials: "include"})
+    .then(r => (r.ok ? r.blob() : null))
+    .then(b => b ? new Promise(res => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const dataUrl = String(fr.result || "");
+        const v = {dataUrl, fmt: /^data:image\/png/i.test(dataUrl) ? "PNG" : "JPEG"};
+        const img = new Image();
+        img.onload = () => { v.w = img.naturalWidth; v.h = img.naturalHeight; _vlLogoCache[id] = v; res(v); };
+        img.onerror = () => { _vlLogoCache[id] = v; res(v); };
+        img.src = dataUrl;
+      };
+      fr.onerror = () => res(null);
+      fr.readAsDataURL(b);
+    }) : null)
+    .catch(() => null);
+}
+function vlReportBranding() {
+  const p = _vlLastScanProfile;
+  if (!p || !p.id) return null;
+  return {
+    company: p.company || "", profileName: p.name || "", profileId: p.id,
+    logo: _vlLogoCache[p.id] || null,
+    authorization: p.auth_ok ? `Signed by ${p.signer} (${p.signer_company}) on ${p.signed_date}` : "",
+  };
+}
+function _vlApplyProfile(body) {
+  const p = vlGetActiveProfile();
+  _vlLastScanProfile = p;
+  if (!p || !body || typeof body !== "object" || body.profile_id !== undefined) return;
+  body.profile_id = p.id;
+  if (p.role === VL_UNAUTH_ROLE) body.auth_mode = "unauthenticated";
+  else if (p.role && body.auth_role === undefined) body.auth_role = p.role;
+  if (p.has_logo) vlLoadProfileLogo(p.id);
+}
+// SCOPE-ENFORCEMENT-UI: one-line summary of a result's scope_enforcement /
+// coverage_note / SKIPPED status for scan logs and tiles.
+function vlScopeNote(d) {
+  if (!d || typeof d !== "object") return "";
+  const parts = [];
+  if (String(d.status || "").toUpperCase() === "SKIPPED" || d._skipped) {
+    parts.push("SKIPPED" + (d.skip_category ? " (" + d.skip_category + ")" : "") + (d.skipped_reason ? ": " + d.skipped_reason : ""));
+  } else if (d.coverage_note) {
+    parts.push(d.coverage_note);
+  }
+  const se = d.scope_enforcement;
+  if (se && se.blocked_total) parts.push(`scope guard blocked ${se.blocked_total} request(s), ${se.in_scope || 0} in scope`);
+  return parts.join(" — ");
+}
+
 function _getScanConsent() {
   try {
     return {
@@ -311,6 +708,7 @@ function _getScanConsent() {
   } catch (_) { return { ack: false, scope: "" }; }
 }
 function _applyScanConsent(body) {
+  try { _vlApplyProfile(body); } catch (_) {}  // TARGET-PROFILE-UI-V1
   try {
     if (body && typeof body === "object" && body.authorization_ack === undefined) {
       const c = _getScanConsent();
@@ -329,13 +727,68 @@ function ScanAuthConsent() {
   const [scope, setScope] = useState(() => { try { return localStorage.getItem("vlScanAuthScope") || ""; } catch (_) { return ""; } });
   const write = (v) => { try { localStorage.setItem("vlScanAuthAck", v ? "true" : "false"); } catch (_) {} };
   const writeScope = (v) => { try { localStorage.setItem("vlScanAuthScope", v); } catch (_) {} };
+  // TARGET-PROFILE-UI-V1 — engagement profile selector
+  const [active, setActive] = useState(() => vlGetActiveProfile());
+  const [profiles, setProfiles] = useState(null);   // null = not loaded yet
+  const [loadErr, setLoadErr] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const load = (force) => vlFetchProfiles(force).then(l => { if (alive) { setProfiles(l); setLoadErr(""); } })
+      .catch(e => { if (alive) setLoadErr(e.message || "could not load profiles"); });
+    load(false);
+    const onSel = (e) => setActive(e.detail || null);
+    const onList = () => load(false);
+    window.addEventListener("vl:profileChanged", onSel);
+    window.addEventListener("vl:profilesListChanged", onList);
+    return () => { alive = false; window.removeEventListener("vl:profileChanged", onSel); window.removeEventListener("vl:profilesListChanged", onList); };
+  }, []);
+  // Refresh the snapshot (auth status / roles) when the list reloads.
+  useEffect(() => {
+    if (!active || profiles === null) return;
+    const p = profiles.find(x => x.id === active.id);
+    if (!p) { vlSetActiveProfile(null); return; }
+    if (p) {
+      const snap = vlProfileSnapshot(p, active.role);
+      if (JSON.stringify(snap) !== JSON.stringify(active)) vlSetActiveProfile(snap);
+    }
+  }, [profiles]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickProfile = (id) => {
+    const p = (profiles || []).find(x => x.id === id);
+    vlSetActiveProfile(p ? vlProfileSnapshot(p) : null);
+  };
+  const pickRole = (role) => { if (active) vlSetActiveProfile({...active, role}); };
+  const covered = !!(active && active.auth_ok);
+  const selStyle = {background:"#0f172a",border:"1px solid #334155",borderRadius:4,padding:"5px 8px",color:"#e2e8f0",fontSize:11,outline:"none",maxWidth:"100%"};
   return (
-    <div style={{margin:"10px 0",padding:"9px 11px",background:"#1a1206",border:"1px solid #7c2d12",borderRadius:6}}>
-      <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"#86efac":"#fdba74",lineHeight:1.4}}>
+    <div style={{margin:"10px 0",padding:"9px 11px",background:covered?"#052e16":"#1a1206",border:"1px solid "+(covered?"#166534":"#7c2d12"),borderRadius:6}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:active?6:8,fontSize:11,color:"#cbd5e1"}}>
+        <b style={{color:"#93c5fd"}}>Engagement profile</b>
+        <select value={active ? active.id : ""} onChange={e=>pickProfile(e.target.value)} style={selStyle}>
+          <option value="">None — lab / ad-hoc scan (per-scan acknowledgment)</option>
+          {(profiles || []).map(p => <option key={p.id} value={p.id}>{p.name}{(p.authorization_status||{}).ok ? "" : " (no valid authorization)"}</option>)}
+        </select>
+        {active && (
+          <select value={active.role || ""} onChange={e=>pickRole(e.target.value)} style={selStyle} title="Auth role the scanners log in as">
+            <option value="">Default role{active.default_role ? " (" + active.default_role + ")" : ""}</option>
+            {(active.roles || []).map(r => <option key={r} value={r}>Role: {r}</option>)}
+            <option value={VL_UNAUTH_ROLE}>Unauthenticated (public surface only)</option>
+          </select>
+        )}
+        {loadErr && <span style={{color:"#fca5a5"}}>profiles unavailable: {loadErr}</span>}
+      </div>
+      {active && (
+        <div style={{fontSize:11,lineHeight:1.5,color:covered?"#86efac":"#fdba74",marginBottom:covered?0:8}}>
+          {covered
+            ? <>Consent covered by the profile's signed authorization — {active.signer} ({active.signer_company}), signed {active.signed_date}. Scope, rate limit, time window{active.destructive_allowed ? "" : " and no-destructive-tests"} are enforced server-side; out-of-scope targets are refused.</>
+            : <>This profile has no valid signed authorization ({active.auth_reason || "missing"}). Scope/safety still apply, but you must confirm authorization below — or complete the Authorization step in Engagements.</>}
+          {active.targets && active.targets.length > 0 && <div style={{color:"#94a3b8"}}>In-scope primary targets: {active.targets.join(", ")}</div>}
+        </div>
+      )}
+      {!covered && <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"#86efac":"#fdba74",lineHeight:1.4}}>
         <input type="checkbox" checked={ack} onChange={e=>{const v=e.target.checked; setAck(v); write(v);}} style={{marginTop:2}}/>
         <span><b>Authorization</b> — I own this target or have written permission to test it. Scanning systems without authorization is illegal; this acknowledgment is logged. Practice labs (lab_*) are exempt.</span>
-      </label>
-      {ack && (
+      </label>}
+      {!covered && ack && (
         <input value={scope} onChange={e=>{setScope(e.target.value); writeScope(e.target.value);}} placeholder="Authorization reference (ticket / contract / asset owner) — optional" style={{marginTop:7,width:"100%",background:"#0f172a",border:"1px solid #7c2d12",borderRadius:4,padding:"6px 9px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
       )}
     </div>
@@ -347,7 +800,7 @@ async function api(path, method, body, token) {
   // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
   method = method || "GET";
   const headers = { "Content-Type":"application/json" };
-  if (token) headers["Authorization"] = "Bearer " + token;
+  if (token && token !== VL_SESSION) headers["Authorization"] = "Bearer " + token;  // API-key callers only; browser uses the cookie
   const isScan = path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/");
   const timeoutMs = isScan ? 300000 : 30000;  // 5 min for scans, 30s otherwise
   if (isScan) _applyScanConsent(body);  // SCAN-AUTHZ-V1 — attach authorization ack
@@ -358,7 +811,7 @@ async function api(path, method, body, token) {
   let res;
   try {
     res = await fetch(API + path, {
-      method: method, headers: headers, signal: ctrl.signal,
+      method: method, headers: headers, signal: ctrl.signal, credentials: "include",
       body: body ? JSON.stringify(body) : null
     });
   } catch(e) {
@@ -958,12 +1411,14 @@ function Login(props) {
       if (mode === "register") {
         if (p !== p2) { setErr("Passwords do not match"); setL(false); return; }
         const data = await api("/api/auth/register","POST",{username:u,email,password:p});
-        onLogin(data.access_token, data.role, data.username, data.plan||"trial");
+        vlSetCsrf(data.csrf_token);  // SESSION-COOKIE-V1: JWT is in the HttpOnly cookie only
+        onLogin(VL_SESSION, data.role, data.username, data.plan||"trial");
       } else {
         const body = {username:u, password:p};
         if (mfaCode) body.mfa_code = mfaCode.trim();
         const data = await api("/api/auth/login","POST",body);
-        onLogin(data.access_token, data.role, data.username, data.plan||"trial");
+        vlSetCsrf(data.csrf_token);  // SESSION-COOKIE-V1: JWT is in the HttpOnly cookie only
+        onLogin(VL_SESSION, data.role, data.username, data.plan||"trial");
       }
     } catch(e2) {
       // Server signals MFA is required (or the code was wrong) → reveal the code field.
@@ -1390,7 +1845,7 @@ function generatePDF(reportData) {
 
     // ─── PAGE HEADER (pages 2+) ──────────────────────────────────
     const drawHeader = () => {
-      txt((companyName||"VulnusLab")+" — Penetration Test Report",margin,10,7,GRAY);
+      txt((companyName||"VulnusLab")+" — Automated Vulnerability Assessment",margin,10,7,GRAY);
       txt(date,pageW-margin,10,7,BLUE,false,"right");
     };
 
@@ -1441,7 +1896,7 @@ function generatePDF(reportData) {
     y = 72;
 
     y+=5;
-    txt("PENETRATION TEST REPORT",pageW/2,y,18,DARK,true,"center"); y+=10;
+    txt("AUTOMATED VULNERABILITY ASSESSMENT",pageW/2,y,18,DARK,true,"center"); y+=10;
 
     // Info table on cover
     const irows=[["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Authenticated", (reportData && reportData.authenticated) ? "Yes - scanned with captured session" : "No - public surface only"],["Prepared By","__REPORTER__"]]; /*PENTEST-AUTH-ROW-V3-REAL*/
@@ -1456,7 +1911,7 @@ function generatePDF(reportData) {
         txt("CONFIDENTIAL",margin+50,y+5,7,WHITE,true);
       } else if(r[1]==="__REPORTER__"){
         // Use configured name if set; otherwise honest default that signals this is automated.
-        txt(reporterName||"VulnusLab Automated Pentest",margin+48,y+4.5,8.5,DARK,true);
+        txt(reporterName||"VulnusLab Automated Assessment",margin+48,y+4.5,8.5,DARK,true);
         txt(reporterRole||"Security Assessment Engine · vulnuslab.com",margin+48,y+9,7,GRAY,false);
       } else {
         txt(r[1],margin+48,y+(rh/2)+1.5,8.5,DARK);
@@ -1554,11 +2009,8 @@ function generatePDF(reportData) {
     const _owaspMap = {};
     OWASP_2021.forEach(([code]) => _owaspMap[code] = []);
     (findings || []).forEach(f => {
-      const tag = String(f.owasp || "").toUpperCase();
-      const m = tag.match(/A(\d{1,2})/);
-      if (!m) return;
-      const code = "A" + m[1].padStart(2, "0");
-      if (_owaspMap[code]) _owaspMap[code].push(f);
+      const code = vlOwaspCategoryFor(f);   // OWASP-MAP-V1 shared mapping
+      if (code && _owaspMap[code]) _owaspMap[code].push(f);
     });
     const _failCats = OWASP_2021.filter(([c]) => _owaspMap[c].length > 0).length;
     const _passCats = 10 - _failCats;
@@ -1955,11 +2407,12 @@ function generatePDF(reportData) {
       if (_total > 0) {
         chk(28);
         y = sectionHead("Scan Coverage", y);
-        const _pct = Math.round(((_total - _errored) / _total) * 100);
+        // HONEST-COVERAGE-V1: skipped + errored scanners did not test anything.
+        const _pct = Math.round(((_data + _empty) / _total) * 100);
         doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(15,118,82);
         doc.text(`${_pct}%`, margin+8, y+10);
         doc.setFont("Arial","bold"); doc.setFontSize(10); doc.setTextColor(15,23,42);
-        doc.text(`${_total - _errored}/${_total} scanners completed cleanly`, margin+30, y+5);
+        doc.text(`${_data + _empty}/${_total} scanners tested the target (${_empty} clean, ${_data} with findings) - ${_skipped} could not test - ${_errored} errored`, margin+30, y+5);
         doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42);
         doc.text(`${_data}`, margin+30, y+11); doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(15,118,82); doc.text("DATA", margin+36, y+11);
         doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_empty}`, margin+58, y+11);
@@ -2049,7 +2502,7 @@ function generatePDF(reportData) {
         chk(50);
         y += 1;
         doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
-        doc.text("Pentest Coverage Matrix", margin+2, y+4);
+        doc.text("Assessment Coverage Matrix", margin+2, y+4);
         doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
         const _totRan = webappCoverage.reduce((a,t)=>a+t.ran,0);
         const _totAll = webappCoverage.reduce((a,t)=>a+t.total,0);
@@ -2652,7 +3105,8 @@ function generatePDF(reportData) {
         // EVIDENCE block: the actual HTTP exchange / payload that triggered
         // the finding. Backend scanners populate this via `evidence_marker`
         // (e.g. "GET /?family=<canary> -> reflected in HTML body").
-        const evidenceText = f.evidence_marker || f.evidence || f.payload || "";
+        // EVIDENCE-INTEGRITY-V1: never render placeholder text as evidence.
+        const evidenceText = vlRealEvidence(f) || (f.payload ? String(f.payload) : "") || VL_NO_EVIDENCE;
         const el = evidenceText ? doc.splitTextToSize(String(evidenceText), contentW-22) : [];
         const evidenceH = el.length > 0 ? (el.length * 3.6 + 7) : 0;
         const needed=Math.max(28, 19+(dl.length+rl.length)*4.5+evidenceH);
@@ -2902,7 +3356,7 @@ function generatePDF(reportData) {
     doc.text("A. Methodology", margin, y+5); y+=8;
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
     const _wapMethod = doc.splitTextToSize(
-      "Web application testing follows OWASP Web Security Testing Guide (WSTG) v4.2 + OWASP Top 10 (2021). Each scanner targets a specific vulnerability class (injection, auth, sensitive data, broken access control, etc.) using context-aware payloads with zero-FP confirmation. Every finding has been actively triggered and re-confirmed.",
+      "Web application testing follows OWASP Web Security Testing Guide (WSTG) v4.2 + OWASP Top 10 (2021). Each scanner targets a specific vulnerability class (injection, auth, sensitive data, broken access control, etc.) using context-aware payloads with zero-FP confirmation. Findings marked CONFIRMED were actively triggered; others are reported with the evidence captured and should be validated.",
       contentW-4);
     _wapMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
     y+=4;
@@ -3221,7 +3675,7 @@ function generateModuleReport(reportData) {
       hline(margin,iy,margin+3,iy,GREEN,1.5);
       txt(r[0],margin+6,iy+5,7.5,GRAY);
       if(r[1]==="__REPORTER__"){
-        txt(reporterName||"VulnusLab Automated Pentest",margin+48,iy+4.5,8.5,WHITE,true);
+        txt(reporterName||"VulnusLab Automated Assessment",margin+48,iy+4.5,8.5,WHITE,true);
         txt(reporterRole||"Security Assessment Engine · vulnuslab.com",margin+48,iy+9,7,GRAY);
       } else {
         txt(String(r[1]),margin+48,iy+5,8.5,WHITE,true);
@@ -3508,7 +3962,7 @@ function WebAppModule(props) {
     companyName:"VulnusLab",
     customLogo:null, logoName:null,
     // Reporter
-    reporterName:"VulnusLab Automated Pentest",
+    reporterName:"VulnusLab Automated Assessment",
     reporterRole:"Security Assessment Engine · vulnuslab.com",
     // Recipient
     preparedFor:"",
@@ -3531,8 +3985,32 @@ function WebAppModule(props) {
     encrypt:true,
     password: Array.from(crypto.getRandomValues(new Uint8Array(9))).map(b=>"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"[b%55]).join(""),
   });
-  const [authCookie, setAuthCookie]         = useState(() => localStorage.getItem("cyberAuthCookie")||"");
-  const [authBearer, setAuthBearer]         = useState(() => localStorage.getItem("cyberAuthBearer")||"");
+  // AUTH-SCOPE-V1: never seed from the old unscoped keys — they could hold a
+  // token for a DIFFERENT target. Auth is (re)loaded per target host below.
+  const [authCookie, setAuthCookie]         = useState("");
+  const [authBearer, setAuthBearer]         = useState("");
+  const authHostRef = useRef("");           // host the current authCookie/authBearer belong to
+  useEffect(() => {
+    try { localStorage.removeItem("cyberAuthCookie"); localStorage.removeItem("cyberAuthBearer"); } catch (e) {}
+  }, []);
+  useEffect(() => {
+    const h = vlAuthHost(target);
+    if (h === authHostRef.current) return;
+    const a = vlAuthLoad(target);       // "" / "" when nothing stored for this host
+    authHostRef.current = h;
+    setAuthCookie(a.cookie);
+    setAuthBearer(a.bearer);
+  }, [target]);
+  // Auth is only ever sent when it was captured/entered for THIS target host.
+  const _scopedAuth = (t) => {
+    const h = vlAuthHost(t);
+    return (h && h === authHostRef.current) ? {cookie: authCookie, bearer: authBearer} : {cookie: "", bearer: ""};
+  };
+  const _setScopedAuth = (t, cookie, bearer) => {
+    authHostRef.current = vlAuthHost(t);
+    setAuthCookie(cookie || ""); setAuthBearer(bearer || "");
+    vlAuthSave(t, cookie || "", bearer || "");
+  };
   const [showAuthPanel, setShowAuthPanel]   = useState(false);
   // ── Auto-login fields. When the user fills these in and clicks the
   // "Auto-login" button, we POST to /api/scan/login, capture the session
@@ -3604,7 +4082,8 @@ function WebAppModule(props) {
     const isExternal = !normTarget.includes("lab_") && !normTarget.includes("localhost") && !normTarget.match(/https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
     const authRequiredLabs = ["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"];
     const needsAuth = authRequiredLabs.some(l => normTarget.includes(l));
-    const hasAuth   = !!(authCookie || authBearer);
+    const _sa = _scopedAuth(normTarget);   // AUTH-SCOPE-V1
+    const hasAuth   = !!(_sa.cookie || _sa.bearer);
     if (needsAuth && !hasAuth) {
       add("WARNING: " + normTarget + " requires authentication for full scanning.");
       add("Click the target button again to auto-login, then restart the scan.");
@@ -3624,8 +4103,8 @@ function WebAppModule(props) {
     if (activePhases.length === PHASES.length) {
       add("[*] v2 streaming: dispatching " + PHASES.length + " phases (NDJSON stream)...");
       const body = {target: normTarget};
-      if (authCookie) body.auth_cookie = authCookie;
-      if (authBearer) body.auth_bearer = authBearer;
+      if (_sa.cookie) body.auth_cookie = _sa.cookie;
+      if (_sa.bearer) body.auth_bearer = _sa.bearer;
       if (customWordlist) body.options = {wordlist: customWordlist};
 
       const _toolToIdx = {};
@@ -3633,6 +4112,7 @@ function WebAppModule(props) {
 
       let _completedCount = 0;
       let _finalSummary = null;
+      let _authFailedMsg = "";
 
       try {
         const headers = {"Content-Type": "application/json"};
@@ -3672,9 +4152,18 @@ function WebAppModule(props) {
             }
             if (evt.event === "scan_started") {
               add("  ⇒ " + evt.total_tools + " scanners dispatched, concurrency=" + evt.concurrency);
+              if (evt.profile) {  // TARGET-PROFILE-UI-V1
+                const pa = evt.profile.auth || {};
+                add("  ⇒ Engagement profile: " + (evt.profile.profile_name || evt.profile.profile_id) + " — max " + evt.profile.max_rps + " req/s, concurrency " + evt.profile.max_concurrency + (evt.profile.destructive_allowed ? "" : ", destructive tests OFF") + (pa.authenticated ? ", logged in as role " + (pa.role || "default") : ", unauthenticated"));
+              }
             }
             else if (evt.event === "heartbeat") {
               // keep-alive; no UI update needed
+            }
+            else if (evt.event === "scan_error" || (evt.status === "AUTH_FAILED" && evt.event !== "tool_complete")) {
+              if (!_authFailedMsg) add("[!] " + (evt.status === "AUTH_FAILED" ? "AUTH_FAILED — " : "") + (evt.error || "authentication failed") + " — no scanners were run (an authenticated engagement never silently falls back to unauthenticated).");
+              _authFailedMsg = evt.error || _authFailedMsg || "authentication failed";
+              if (evt.event === "scan_complete") _finalSummary = evt;
             }
             else if (evt.event === "tool_complete") {
               const idx = _toolToIdx[evt.tool];
@@ -3692,7 +4181,8 @@ function WebAppModule(props) {
               const ph = PHASES.find(p => p.tool === evt.tool);
               const phName = ph ? ph.name : evt.tool;
               const status = data._failed ? "" : (data._skipped || data.skipped_reason) ? "○" : "";
-              add("  " + status + " [" + _completedCount + "/" + PHASES.length + "] " + phName + " (" + evt.duration_sec + "s, +" + elapsed + "s)");
+              const _sn = vlScopeNote(data);
+              add("  " + status + " [" + _completedCount + "/" + PHASES.length + "] " + phName + " (" + evt.duration_sec + "s, +" + elapsed + "s)" + (_sn ? " — " + _sn : ""));
             }
             else if (evt.event === "scan_complete") {
               _finalSummary = evt;
@@ -3722,7 +4212,18 @@ function WebAppModule(props) {
         // AND no exception fired, leaving tiles stuck in QUEUED state.
         if (!stopRef.current) {
           const missing = PHASES.filter(ph => !(ph.tool in results));
-          if (missing.length > 0) {
+          if (missing.length > 0 && _authFailedMsg) {
+            // AUTH_FAILED: nothing ran — record every scanner as SKIPPED with
+            // the reason so the report never reads as a clean pass.
+            add("[!] " + missing.length + " scanner(s) not run — profile login failed");
+            missing.forEach(ph => {
+              const idx = _toolToIdx[ph.tool];
+              results[ph.tool] = {ok:true, status:"SKIPPED", _skipped:true, skip_category:"auth_failed",
+                                   skipped_reason:"Not run: " + _authFailedMsg, findings:[], tool:ph.tool};
+              setDone(p => [...p, idx]);
+            });
+            setAll(Object.assign({}, results));
+          } else if (missing.length > 0) {
             add("[!] " + missing.length + " scanner(s) didn't report — marked as failed");
             missing.forEach(ph => {
               const idx = _toolToIdx[ph.tool];
@@ -3750,7 +4251,7 @@ function WebAppModule(props) {
       setCurPhase(i);
       add("[*] Phase " + (idx+1) + "/" + activePhases.length + ": Running " + ph.tool + "...");
       try {
-        const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
+        const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, _sa.cookie?{auth_cookie:_sa.cookie}:{}, _sa.bearer?{auth_bearer:_sa.bearer}:{}, customWordlist?{wordlist:customWordlist}:{});
         const data = await api(ph.endpoint, "POST", body, token);
         // Stop was clicked while this phase's request was in flight — discard the result.
         if (stopRef.current) {
@@ -3880,7 +4381,8 @@ function WebAppModule(props) {
     setDone(p => p.filter(x => x !== i));
     add("[*] Re-running: " + ph.name + " on " + normTarget);
     try {
-      const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
+      const _sa = _scopedAuth(normTarget);   // AUTH-SCOPE-V1
+      const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, _sa.cookie?{auth_cookie:_sa.cookie}:{}, _sa.bearer?{auth_bearer:_sa.bearer}:{}, customWordlist?{wordlist:customWordlist}:{});
       const data = await api(ph.endpoint, "POST", body, token);
       setAll(prev => ({...prev, [ph.tool]: data}));
       setDone(p => [...p.filter(x => x !== i), i]);
@@ -4043,27 +4545,14 @@ function WebAppModule(props) {
       if (!cur || sc > cur.score) _best.set(fp, {finding: f, score: sc});
     });
     allFindings = Array.from(_best.values()).map(v => v.finding);
-    // ─── CVSS BACKFILL ─── replace 0.0 with a sane CWE-mapped score so the
-    // PDF doesn't show "CVSS 0.0" for findings that obviously have impact
-    // (CWE-290 SPF/DMARC, CWE-295 CAA, CWE-693 missing headers, etc.).
-    // Backend may legitimately omit CVSS for some checks — we backfill here.
-    const _cvssByCwe = {
-      "CWE-79": "7.5", "CWE-89": "9.8", "CWE-78": "9.8", "CWE-22": "7.5",
-      "CWE-918": "8.1", "CWE-611": "8.1", "CWE-352": "6.8", "CWE-601": "6.1",
-      "CWE-264": "5.5", "CWE-284": "5.3", "CWE-200": "5.3", "CWE-538": "5.3",
-      "CWE-290": "5.3", "CWE-295": "3.1", "CWE-310": "5.3", "CWE-319": "7.4",
-      "CWE-326": "5.3", "CWE-345": "5.3", "CWE-358": "5.0", "CWE-384": "6.8",
-      "CWE-614": "4.3", "CWE-693": "4.3", "CWE-749": "5.3", "CWE-798": "9.8",
-      "CWE-1021": "6.1", "CWE-1004": "4.3", "CWE-307": "5.3",
-    };
-    const _sevDefaultCvss = {CRITICAL:"9.0", HIGH:"7.5", MEDIUM:"5.0", LOW:"3.1", INFO:"0.0"};
-    allFindings.forEach(f => {
-      const cv = parseFloat(f.cvss);
-      if (!isFinite(cv) || cv <= 0) {
-        const cwe = (f.cwe || "").toUpperCase();
-        f.cvss = _cvssByCwe[cwe] || _sevDefaultCvss[f.severity] || "5.0";
-      }
-    });
+    // ─── CVSS-CALC-V1 ─── (replaces the old CWE->score backfill, which put
+    // fabricated scores next to vectors that did not produce them). The shared
+    // calculator keeps the finding's own vector/score, else applies a PR-aware
+    // severity template and uses ITS computed score; severity follows the score.
+    {
+      const _sa0 = _scopedAuth(target); const _authedRun = !!(_sa0.cookie || _sa0.bearer);
+      allFindings = allFindings.map(f => vlNormalizeFindingCvss(f, _authedRun));
+    }
     // Sort final findings by severity so master table reads CRITICAL -> INFO
     const _sevOrder = {CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3, INFO:4};
     allFindings.sort((a, b) => (_sevOrder[a.severity] ?? 5) - (_sevOrder[b.severity] ?? 5));
@@ -4122,7 +4611,7 @@ function WebAppModule(props) {
     // AUTH-REPORT-V2 — reflect the real session state instead of hardcoding
     // false. The webapp auto-login (below) stashes authCookie/authBearer and
     // threads them into every scanner, so a session-captured run must say so.
-    const _webapAuthenticated = !!(authCookie || authBearer);
+    const _sa1 = _scopedAuth(target); const _webapAuthenticated = !!(_sa1.cookie || _sa1.bearer);   // AUTH-SCOPE-V1
     // INCONCLUSIVE-V1 — an unauthenticated scan of a login-gated app only sees
     // the public surface; injection scanners skip the real app, so a "LOW RISK"
     // verdict is misleading. Detect a login surface and stamp the report.
@@ -4154,20 +4643,20 @@ function WebAppModule(props) {
       pdfConfig: {
         ...(cfg || {}),
         companyName:  cfg.companyName  || "VulnusLab",
-        reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst") ? cfg.reporterName : "VulnusLab Automated Pentest",
+        reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst" && cfg.reporterName !== "VulnusLab Automated Pentest") ? cfg.reporterName : "VulnusLab Automated Assessment",
         reporterRole: (cfg.reporterRole && cfg.reporterRole !== "Penetration Tester") ? cfg.reporterRole : "Security Assessment Engine - vulnuslab.com",
         customLogo:   cfg.customLogo   || null,
         template:     cfg.template     || "standard",
       },
       moduleKey:   "webapp",
-      moduleLabel: "Web Application Pentest",
-      moduleTitle: "PENETRATION TEST REPORT",
+      moduleLabel: "Web Application Security Assessment",
+      moduleTitle: "AUTOMATED VULNERABILITY ASSESSMENT REPORT",   // HONEST-LABEL-V1
       moduleSubtitle: "Web Application Security Assessment",
       playbookPath: "03_webapp.md",
       methodology: [
         "Web application testing follows OWASP Web Security Testing Guide (WSTG) v4.2 + OWASP Top 10 (2021).",
         "Each scanner targets a specific vulnerability class (injection, auth, sensitive data, broken access control, etc.) using context-aware payloads with zero-FP confirmation.",
-        "Every finding has been actively triggered and re-confirmed.",
+        "Findings marked CONFIRMED were actively triggered; others are reported with the evidence captured and should be validated.",
       ],
     });
     // Legacy code below kept commented for one cycle in case rollback is needed.
@@ -4295,7 +4784,7 @@ function WebAppModule(props) {
       _esc(f.owasp || ""),
       _esc(f.confidence || "CONFIRMED"),
       _esc(f.verified_at || ""),
-      _esc(f.evidence_marker || ""),
+      _esc(vlEvidenceOrNone(f)),   // EVIDENCE-INTEGRITY-V1
       _esc(f.detail || ""),
       _esc(f.remediation || ""),
     ]));
@@ -4363,7 +4852,7 @@ function WebAppModule(props) {
             cvss:        f.cvss || "",
             confidence:  f.confidence || "CONFIRMED",
             verified_at: f.verified_at || "",
-            evidence:    f.evidence_marker || "",
+            evidence:    vlEvidenceOrNone(f),   // EVIDENCE-INTEGRITY-V1
             owasp:       f.owasp || "",
           },
         })),
@@ -4436,8 +4925,7 @@ function WebAppModule(props) {
             try {
               const d = await api("/api/lab/autologin","POST",{lab},token);
               if (d?.ok && d?.cookie) {
-                setAuthCookie(d.cookie);
-                localStorage.setItem("cyberAuthCookie", d.cookie);
+                _setScopedAuth(t, d.cookie, "");   // AUTH-SCOPE-V1
               }
             } catch(e) {}
           }
@@ -4491,10 +4979,9 @@ function WebAppModule(props) {
                           const lr = await api("/api/scan/login","POST",{target, login_url: loginUrl, username: loginUser, password: loginPass, auth_type: "form"}, token);
                           const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
                           if (lr && (lr.login_verified || _got)) {
-                            setAuthCookie(lr.auth_cookie || "");
-                            if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
-                            localStorage.setItem("cyberAuthCookie", lr.auth_cookie || "");
-                            if (lr.auth_bearer) localStorage.setItem("cyberAuthBearer", lr.auth_bearer);
+                            // AUTH-SCOPE-V1: replace BOTH values — a cookie-only login
+                            // (DVWA) must not keep a previous target's bearer.
+                            _setScopedAuth(target, lr.auth_cookie || "", lr.auth_bearer || "");
                             setAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
                           } else { setAutoLoginStatus(lr?.hint || "Login could not be verified"); }
                         } catch(e){ setAutoLoginStatus("Login request failed: "+(e.message||e)); }
@@ -4511,15 +4998,15 @@ function WebAppModule(props) {
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authCookie} onChange={e=>{_setScopedAuth(target, e.target.value, authBearer);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token</div>
-                    <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authBearer} onChange={e=>{_setScopedAuth(target, authCookie, e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                 </div>
                 {(authCookie||authBearer) && (
-                  <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAutoLoginStatus(null);localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
+                  <button onClick={()=>{_setScopedAuth(target, "", "");setAutoLoginStatus(null);}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
                 )}
               </div>
             )}
@@ -4867,7 +5354,13 @@ function WebAppModule(props) {
                 )}
 
                 {/* Plain-success — no error, no findings, no vuln flag */}
-                {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && (
+                {/* HONEST-COVERAGE-V1: a skipped scanner is NOT a clean result. */}
+                {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && (res._skipped || res.skipped_reason || res.status === "skipped") && (
+                  <div style={{padding:"10px 12px",background:"rgba(234,179,8,0.08)",border:"1px solid rgba(234,179,8,0.30)",borderRadius:6,color:"#fde68a"}}>
+                    Could not test — scanner was skipped{res.skipped_reason ? ": " + res.skipped_reason : ""}. This is not a clean result.
+                  </div>
+                )}
+                {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && !(res._skipped || res.skipped_reason || res.status === "skipped") && (
                   <div style={{padding:"10px 12px",background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.30)",borderRadius:6,color:"#bbf7d0"}}>
                     Scan completed cleanly — no issues detected for this target.
                   </div>
@@ -4908,7 +5401,8 @@ function WebAppModule(props) {
 
       {/* FINDINGS TAB — VL-FORGE Web App Pentesting findings synthesis (all 32 tools) */}
       {tab==="findings" && finished && (() => {
-        const allF = synthesizeWebappFindings(allResults);
+        const _saF = _scopedAuth(target);
+        const allF = synthesizeWebappFindings(allResults, !!(_saF.cookie || _saF.bearer));
         const coverage = computeWebappCoverage(allResults);
         const toolsRan = coverage.reduce((acc,t) => acc + t.ran, 0);
         const toolsFlagged = coverage.reduce((acc,t) => acc + t.flagged, 0);
@@ -4966,7 +5460,7 @@ function WebAppModule(props) {
                       <span style={{marginLeft:"auto",fontSize:9,color:"#3b82f6",fontFamily:"monospace"}}>via {f.source}</span>
                     </div>
                     <div style={{fontSize:12,color:"#e2e8f0",marginBottom:8}}>{f.detail}</div>
-                    {f.evidence && <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"4px 8px",fontSize:10,color:"#94a3b8",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"#cbd5e1"}}>Evidence:</strong> {f.evidence}</div>}
+                    {f.evidence && <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"4px 8px",fontSize:10,color:"#94a3b8",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"#cbd5e1"}}>Evidence:</strong> {vlEvidenceOrNone(f)}</div>}
                     {f.remediation && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#4ade80"}}>
                       <strong>Fix:</strong> {f.remediation}
                     </div>}
@@ -5130,7 +5624,7 @@ function WebAppModule(props) {
 
     {/* ── PDF CUSTOMIZATION MODAL — uses the shared PDFConfigModal ── */}
     <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
-      moduleLabel="Web App Pentest Report"
+      moduleLabel="Web App Automated Vulnerability Assessment"
       onGenerate={cfg => { try { dlPDF(cfg); } catch(e){ alert("PDF error: " + (e.message || e)); } }}/>
         </div>
   );
@@ -5580,15 +6074,15 @@ function generateShellReport({title, icon, target, attacks, results}) {
     doc.text("LAB", sx, sy + 14, {align:"left"});
   }
   doc.setFontSize(26); doc.setTextColor(241,245,249); doc.setFont("helvetica","bold");
-  doc.text("PENETRATION TEST", M, 75);
-  doc.text("REPORT", M, 88);
+  doc.text("AUTOMATED VULNERABILITY", M, 75);   // HONEST-LABEL-V1
+  doc.text("ASSESSMENT REPORT", M, 88);
   doc.setFontSize(16); doc.setTextColor(96,165,250);
   doc.text(_safe(`${icon}  ${title}`) || _safe(title), M, 105);
   doc.setFillColor(30,41,59); doc.rect(M,118,W-2*M,45,"F");
   doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   const coverInfo=[["Target",target||"—"],["Date",new Date().toLocaleDateString()],
-    ["Time",new Date().toLocaleTimeString()],["Prepared By","VulnusLab Automated Pentest"],
-    ["Classification","CONFIDENTIAL"],["Report Type","Security Assessment"]];
+    ["Time",new Date().toLocaleTimeString()],["Prepared By","VulnusLab Automated Assessment"],
+    ["Classification","CONFIDENTIAL"],["Report Type","Automated Vulnerability Assessment"]];
   coverInfo.forEach(([k,v],i)=>{
     doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
     doc.text(k+":",M+4,128+i*7);
@@ -5728,7 +6222,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
     y+=10;
     if(!findings.length){
       chk(6); doc.setFontSize(7); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
-      doc.text("No actionable findings — target clean or tool not applicable",M+4,y); y+=8;
+      doc.text("No actionable findings reported - not proof of a clean target (tool may not have applied)",M+4,y); y+=8;
     } else {
       findings.slice(0,20).forEach(f=>{
         chk(8); const [fr,fg,fb]=SC(f.severity);
@@ -7443,632 +7937,12 @@ function PersistenceModule({token, apiUrl}) {
   return <ModuleShell title="Advanced Persistence" moduleKey="persistence" icon="" color="#7c3aed" desc="Rootkit detection, cron/systemd backdoors, persistence IoC hunting — offensive + defensive" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
-// ── OSINT PDF ─────────────────────────────────────────────────
-function generateOsintPdf(results, target, _pdfConfig) {
-  // _pdfConfig accepted (companyName, watermark, password, etc.) for parity
-  // with the universal report flow; this v1 generator does not yet honour
-  // every field, but accepts the arg so the call sites stay consistent.
-  const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  const pageW=210, margin=15, contentW=180;
-  const DARK=[15,23,42], BLUE=[37,99,235], GRAY=[100,116,139], WHITE=[255,255,255];
-  const LIGHT=[241,245,249], GREEN=[21,128,61], RED=[185,28,28], LBLUE=[219,234,254];
-  const ORANGE=[234,88,12];
-  let y=18, _secN=0;
-  const date = new Date().toLocaleString();
-  const txt=(t,x,yy,sz=9,color=DARK,bold=false,align="left")=>{
-    doc.setFont("helvetica",bold?"bold":"normal"); doc.setFontSize(sz); doc.setTextColor(...color);
-    doc.text(String(t),x,yy,{align});
-  };
-  const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
-  const drawHeader=()=>{
-    txt("VulnusLab — OSINT & Threat Intel Report",margin,10,7,GRAY);
-    txt(date,pageW-margin,10,7,BLUE,false,"right");
-  };
-  const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
-  const sHead=(title,yy)=>{
-    _secN++;
-    fillR(margin,yy,contentW,9,LBLUE);
-    txt(_secN+". "+title,margin+4,yy+6.2,10,BLUE,true);
-    return yy+13;
-  };
-  const row2=(label,value,i)=>{
-    chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-    txt(label,margin+3,y+5,8.5,GRAY,true);
-    const vl=doc.splitTextToSize(String(value||""),120);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
-    doc.text(vl[0],margin+55,y+5); y+=7;
-  };
-
-  // ── COVER ──
-  fillR(0,0,pageW,64,DARK);
-  // VulnusLab shield + wordmark
-  {
-    const sx = pageW/2, sy = 14, w = 12, h = 14;
-    doc.setFillColor(15,23,42);
-    doc.setDrawColor(59,130,246); doc.setLineWidth(0.6);
-    doc.lines([
-      [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
-      [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
-      [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
-    ], sx-w*0.45, sy-h*0.4, [1,1], 'FD');
-    doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(59,130,246);
-    doc.text("V", sx, sy + 1, {align:"center"});
-    doc.setFont("helvetica","bold"); doc.setFontSize(7);
-    doc.setTextColor(241,245,249);
-    doc.text("VULNUS", sx - 1, sy + 10, {align:"right"});
-    doc.setTextColor(59,130,246);
-    doc.text("LAB", sx, sy + 10, {align:"left"});
-  }
-  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...BLUE);
-  doc.text("OSINT & THREAT INTEL REPORT",pageW/2,38,{align:"center"});
-  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(...GRAY);
-  doc.text("Open Source Intelligence Gathering",pageW/2,48,{align:"center"});
-  y=74;
-  fillR(margin,y,contentW,8,DARK);
-  txt("FIELD",margin+3,y+5.5,8,WHITE,true); txt("VALUE",margin+55,y+5.5,8,WHITE,true); y+=8;
-  [["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Report Type","OSINT Assessment"]].forEach((r,i)=>{
-    fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
-    txt(r[0],margin+3,y+5.5,8.5,GRAY,true); txt(String(r[1]),margin+55,y+5.5,8.5,DARK); y+=8;
-  });
-  y+=10;
-
-  // ─── SCAN COVERAGE (DATA / EMPTY / SKIPPED / ERROR) ──────────
-  // User explicit ask 2026-06-09: every module's PDF must show this
-  // breakdown for auditor trust. Mirrors the Universal + Recon Scan
-  // Coverage section. Counts each OSINT probe against its result key.
-  {
-    const _osintProbes = ["geoip","email_osint","recon_ng","spiderfoot","virustotal","sherlock","hibp","dnstwist","googledorks","maltego"];
-    let _data = 0, _empty = 0, _skipped = 0, _errored = 0;
-    _osintProbes.forEach(k => {
-      const r = results[k];
-      if (r == null) { _skipped++; return; }
-      if (typeof r === "object" && r.error) { _errored++; return; }
-      const hasData = (Array.isArray(r.emails) && r.emails.length > 0)
-        || (Array.isArray(r.hosts) && r.hosts.length > 0)
-        || (Array.isArray(r.breaches) && r.breaches.length > 0)
-        || (Array.isArray(r.domains) && r.domains.length > 0)
-        || (Array.isArray(r.dorks) && r.dorks.length > 0)
-        || (Array.isArray(r.accounts_found) && r.accounts_found.length > 0)
-        || r.ip || r.malicious !== undefined || r.abuse_score !== undefined || r.guide
-        || (r.checked && r.breaches);
-      if (hasData) _data++;
-      else _empty++;
-    });
-    const _total = _data + _empty + _skipped + _errored;
-    if (_total > 0) {
-      chk(28);
-      y = sHead("Scan Coverage", y);
-      const _pct = Math.round(((_total - _errored) / _total) * 100);
-      doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(15,118,82);
-      doc.text(`${_pct}%`, margin+8, y+10);
-      doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(15,23,42);
-      doc.text(`${_total - _errored}/${_total} probes completed cleanly`, margin+30, y+5);
-      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42);
-      doc.text(`${_data}`, margin+30, y+11); doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(15,118,82); doc.text("DATA", margin+36, y+11);
-      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_empty}`, margin+58, y+11);
-      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(100,116,139); doc.text("EMPTY", margin+64, y+11);
-      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_skipped}`, margin+88, y+11);
-      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(133,79,11); doc.text("SKIPPED", margin+94, y+11);
-      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_errored}`, margin+122, y+11);
-      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(162,28,28); doc.text("ERROR", margin+128, y+11);
-      y += 16;
-      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
-      doc.text("DATA returned findings    EMPTY ran clean, no data    SKIPPED not applicable    ERROR tool had a problem", margin, y);
-      y += 8;
-    }
-  }
-
-  // ── GeoIP ──
-  const geo=results.geoip||{};
-  if(geo.ip){
-    chk(30); y=sHead("GeoIP / Location",y);
-    [["IP",geo.ip],["Hostname",geo.hostname],["City",geo.city],["Region",geo.region],
-     ["Country",geo.country],["ISP",geo.isp],["Org / ASN",geo.org||geo.as_info],["Timezone",geo.timezone],["Coordinates",geo.loc]]
-    .filter(([,v])=>v).forEach(([k,v],i)=>row2(k,v,i));
-    y+=6;
-  }
-
-  // ── VirusTotal ──
-  const vt=results.virustotal||{};
-  if(vt.total_engines){
-    chk(30); y=sHead("VirusTotal Reputation",y);
-    const threat=vt.malicious>0||vt.suspicious>0;
-    fillR(margin,y,contentW,10,threat?[254,226,226]:[220,252,231]);
-    txt(threat?"THREAT DETECTED":"CLEAN — No engines flagged",margin+4,y+7,10,threat?RED:GREEN,true);
-    txt(`${vt.malicious}/${vt.total_engines} engines`,margin+100,y+7,9,DARK); y+=14;
-    [["Malicious",vt.malicious],["Suspicious",vt.suspicious],["Harmless",vt.harmless],["Reputation",vt.reputation]]
-    .forEach(([k,v],i)=>row2(k,v,i));
-    y+=6;
-  }
-
-  // ── AbuseIPDB ──
-  const ab=results.abuseipdb||{};
-  if(ab.abuse_score!==undefined){
-    chk(30); y=sHead("AbuseIPDB Threat Score",y);
-    const threat=ab.abuse_score>25;
-    fillR(margin,y,contentW,10,threat?[254,226,226]:[220,252,231]);
-    txt(`${ab.abuse_score}% Abuse Confidence Score`,margin+4,y+7,10,threat?RED:GREEN,true); y+=14;
-    [["IP",ab.ip],["Reports (90 days)",ab.total_reports],["Country",ab.country],["ISP",ab.isp]]
-    .filter(([,v])=>v!==undefined&&v!=="").forEach(([k,v],i)=>row2(k,v,i));
-    y+=6;
-  }
-
-  // ── HaveIBeenPwned ──
-  const hibp=results.hibp||{};
-  if(hibp.checked){
-    chk(30); y=sHead("HaveIBeenPwned — Data Breaches",y);
-    if(hibp.breaches?.length>0){
-      fillR(margin,y,contentW,8,[254,226,226]);
-      txt(`${hibp.breaches.length} BREACH(ES) FOUND`,margin+4,y+6,10,RED,true); y+=12;
-      hibp.breaches.slice(0,15).forEach((b,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(b,margin+3,y+5,8.5,DARK); y+=7; });
-    } else {
-      fillR(margin,y,contentW,8,[220,252,231]);
-      txt("No breaches found for this domain",margin+4,y+6,10,GREEN,true); y+=10;
-    }
-    y+=6;
-  }
-
-  // ── DNSTwist ──
-  const dt=results.dnstwist||{};
-  if(dt.domains?.length>0){
-    chk(30); y=sHead(`DNSTwist — Phishing Domains (${dt.domains.length} found)`,y);
-    fillR(margin,y,contentW,8,DARK);
-    txt("DOMAIN",margin+3,y+5.5,8,WHITE,true); txt("TYPE",margin+100,y+5.5,8,WHITE,true); txt("IP",margin+140,y+5.5,8,WHITE,true); y+=8;
-    dt.domains.slice(0,30).forEach((d,i)=>{
-      chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-      txt(d.domain||"",margin+3,y+5,8,BLUE);
-      txt(d.fuzzer||"",margin+100,y+5,7.5,GRAY);
-      txt(d.dns_a?d.dns_a[0]:"",margin+140,y+5,7.5,DARK); y+=7;
-    });
-    y+=6;
-  }
-
-  // ── Google Dorks ──
-  const gd=results.googledorks||{};
-  if(gd.dorks?.length>0){
-    chk(30); y=sHead("Google Dorks — Intelligence Queries",y);
-    gd.dorks.forEach((d,i)=>{
-      const lines=doc.splitTextToSize(d,contentW-8);
-      const rh=Math.max(7,lines.length*4.5+3);
-      chk(rh); fillR(margin,y,contentW,rh,i%2===0?LIGHT:WHITE);
-      doc.setFont("courier","normal"); doc.setFontSize(7); doc.setTextColor(...BLUE);
-      doc.text(lines,margin+3,y+5); y+=rh;
-    });
-    y+=6;
-  }
-
-  // ── theHarvester ──
-  const mail=results.email_osint||{};
-  const sf=results.spiderfoot||{};
-  const harvEmails=mail.emails||[]; const harvHosts=mail.hosts||[];
-  if(harvEmails.length>0||harvHosts.length>0||mail.asns?.length>0||mail.interesting_urls?.length>0){
-    chk(30); y=sHead("theHarvester — Email & Host Intelligence",y);
-    // emails
-    if(harvEmails.length>0){
-      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-      chk(6); doc.text(`Emails Found (${harvEmails.length}):`,margin+2,y+4); y+=7;
-      harvEmails.forEach((e,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(e,margin+3,y+5,8.5,BLUE); y+=7; });
-      y+=3;
-    }
-    // hosts from harvester
-    if(harvHosts.length>0){
-      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-      chk(6); doc.text(`Hosts Found (${harvHosts.length}):`,margin+2,y+4); y+=7;
-      harvHosts.slice(0,20).forEach((h,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(h,margin+3,y+5,8.5,DARK); y+=7; });
-      y+=3;
-    }
-    // ASNs
-    if(mail.asns?.length>0){
-      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-      chk(6); doc.text(`ASNs Discovered (${mail.asns.length}):`,margin+2,y+4); y+=7;
-      mail.asns.forEach((a,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(a,margin+3,y+5,8.5,DARK); y+=7; });
-      y+=3;
-    }
-    // interesting URLs
-    if(mail.interesting_urls?.length>0){
-      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-      chk(6); doc.text(`Interesting URLs (${mail.interesting_urls.length}):`,margin+2,y+4); y+=7;
-      mail.interesting_urls.forEach((u,i)=>{
-        const ul=doc.splitTextToSize(u,contentW-8);
-        const uh=Math.max(7,ul.length*4+3);
-        chk(uh); fillR(margin,y,contentW,uh,i%2===0?LIGHT:WHITE);
-        txt(ul,margin+3,y+4.5,7.5,BLUE); y+=uh;
-      });
-      y+=3;
-    }
-    y+=4;
-  }
-
-  // ── Recon-ng ──
-  const rng=results.recon_ng||{};
-  if(rng.hosts?.length>0){
-    chk(30); y=sHead(`Recon-ng — Certificate Transparency Hosts (${rng.hosts.length})`,y);
-    rng.hosts.forEach((h,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(h,margin+3,y+5,8.5,DARK); y+=7; });
-    y+=6;
-  } else if(results.recon_ng){
-    chk(18); y=sHead("Recon-ng — Certificate Transparency",y);
-    fillR(margin,y,contentW,8,LIGHT); txt("No additional hosts found via Recon-ng.",margin+4,y+5.5,8.5,GRAY); y+=12;
-  }
-
-  // ── All Subdomains (combined) ──
-  const sfEmails=sf.emails||[]; const sfHosts=sf.hosts||[];
-  const allEmails=[...new Set([...harvEmails,...sfEmails])];
-  if(sfEmails.length>0&&allEmails.length>harvEmails.length){
-    chk(30); y=sHead(`SpiderFoot — Additional Emails (${sfEmails.length})`,y);
-    sfEmails.forEach((e,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(e,margin+3,y+5,8.5,BLUE); y+=7; });
-    y+=6;
-  }
-  const allHosts=[...new Set([...harvHosts,...sfHosts,...(rng.hosts||[])])];
-  if(allHosts.length>0){
-    chk(30); y=sHead(`Subdomains / Hosts Discovered (${allHosts.length})`,y);
-    allHosts.forEach((h,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(h,margin+3,y+5,8.5,DARK); y+=7; });
-    y+=6;
-  }
-
-  // ── Sherlock ──
-  const sher=results.sherlock||{};
-  if(sher.accounts_found?.length>0){
-    chk(30); y=sHead(`Social Media Accounts — "${sher.username}" (${sher.total} found)`,y);
-    sher.accounts_found.forEach((a,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(a,margin+3,y+5,8,BLUE); y+=7; });
-    y+=6;
-  }
-
-  // ── Maltego ──
-  const malt=results.maltego||{};
-  if(malt.guide){
-    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
-    const guideLines=doc.splitTextToSize(malt.guide,contentW-10);
-    const guideH=Math.max(30,guideLines.length*4.5+8);
-    chk(12+guideH); // check heading + content together so they never split across pages
-    y=sHead("Maltego — Manual OSINT Guide",y);
-    fillR(margin,y,contentW,guideH,[241,245,249]);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
-    doc.text(guideLines,margin+5,y+6); y+=guideH+6;
-  }
-
-    // ═══ INDUSTRY-STANDARD: GLOSSARY ═══
-  chk(60); y = sHead("Glossary", y);
-  fillR(margin,y,contentW,7,[15,23,42]); txt("TERM",margin+3,y+5,8,[255,255,255],true); txt("DEFINITION",margin+38,y+5,8,[255,255,255],true); y+=7;
-  const _gloss = [
-    ["CVE","Common Vulnerabilities and Exposures — unique ID for a publicly disclosed security flaw"],
-    ["CVSS","Common Vulnerability Scoring System — 0-10 numeric severity (v3.1)"],
-    ["CWE","Common Weakness Enumeration — classification of underlying defect type"],
-    ["OWASP","Open Web Application Security Project — industry security non-profit"],
-    ["PTES","Penetration Testing Execution Standard — 7-phase methodology"],
-    ["WSTG","Web Security Testing Guide — OWASP's web-app pentest manual"],
-    ["DAST","Dynamic Application Security Testing — black-box runtime scanning"],
-    ["SAST","Static Application Security Testing — source-code scanning"],
-    ["AXFR","DNS Zone Transfer — full zone copy from master to secondary"],
-    ["CT log","Certificate Transparency log — public log of issued TLS certs"],
-    ["WAF","Web Application Firewall"],
-    ["CDN","Content Delivery Network"],
-    ["SPF/DKIM/DMARC","Email authentication standards (sender validation, signing, policy)"],
-    ["DNSSEC","DNS Security Extensions — cryptographic signing of DNS records"],
-  ];
-  _gloss.forEach((g,i)=>{
-    chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-    txt(g[0],margin+3,y+5,8,BLUE,true);
-    const vl = doc.splitTextToSize(g[1],138);
-    doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
-    doc.text(vl[0]||"",margin+38,y+5); y+=7;
-  });
-  y += 6;
-
-  // ── END OF REPORT ──
-  if(y+32>284){doc.addPage();y=18;drawHeader();} y+=4;
-  fillR(margin,y,contentW,30,LBLUE); fillR(margin,y,3,30,BLUE);
-  txt("— END OF REPORT —",pageW/2,y+8,10,BLUE,true,"center");
-  txt("Generated by VulnusLab — automated OSINT gathering by VulnusLab engine.",pageW/2,y+14,6.5,GRAY,false,"center");
-  txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,y+18,6,GRAY,false,"center");
-  txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,y+25,7,BLUE,true,"center");
-
-  // ── BORDERS ALL PAGES ──
-  const total=doc.internal.getNumberOfPages();
-  for(let i=1;i<=total;i++){
-    doc.setPage(i);
-    doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
-    if(i>=2){
-      txt("VulnusLab | CONFIDENTIAL  ·  vulnuslab.com",margin,290,6.5,GRAY);
-      txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
-    }
-  }
-  const _fn=t=>(t||"target").replace(/https?:\/\//,"").replace(/[^a-zA-Z0-9.\-]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"");
-  const _dt=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`;};
-  doc.save(`osint_${_fn(target)}_${_dt()}.pdf`);
-}
-
-// ── OSINT ─────────────────────────────────────────────────────
-function OsintModule({token, apiUrl}) {
-  const [target,  setTarget]  = useState("");
-  const [vtKey,   setVtKey]   = useState(localStorage.getItem("vtKey")||"");
-  const [abKey,   setAbKey]   = useState(localStorage.getItem("abKey")||"");
-  const [running, setRunning] = useState(false);
-  const [done,    setDone]    = useState([]);
-  const [results, setResults] = useState({});
-  const [log,     setLog]     = useState([]);
-  const [showPDFModal, setShowPDFModal] = useState(false);
-
-  const addLog = msg => setLog(p=>[...p, msg]);
-
-  const getHost  = t => { try { return new URL(t.trim()).hostname; } catch { return t.trim().replace(/^https?:\/\//,"").split("/")[0]; } };
-  const isIP     = t => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(getHost(t));
-  const isDomain = t => /^[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$/.test(getHost(t)) && !isIP(t);
-  const isUser   = t => !isIP(t) && !isDomain(t);
-
-  const TOOLS = [
-    {id:"geoip",       label:"GeoIP Lookup",       icon:"", ep:"/api/osint/geoip"},
-    {id:"email_osint", label:"Email Harvesting",    icon:"", ep:"/api/osint/email_osint", domainOnly:true},
-    {id:"recon_ng",    label:"Recon-ng",            icon:"", ep:"/api/osint/recon_ng",    domainOnly:true},
-    {id:"spiderfoot",  label:"SpiderFoot",          icon:"", ep:"/api/osint/spiderfoot",  domainOnly:true},
-    {id:"virustotal",  label:"VirusTotal",          icon:"", ep:"/api/osint/virustotal",  needsVt:true},
-    {id:"abuseipdb",   label:"AbuseIPDB",           icon:"", ep:"/api/osint/abuseipdb",   needsAb:true},
-    {id:"sherlock",    label:"Sherlock (Username)",  icon:"", ep:"/api/osint/sherlock",    userOnly:true},
-    {id:"hibp",        label:"HaveIBeenPwned",       icon:"", ep:"/api/osint/hibp",         domainOnly:true},
-    {id:"dnstwist",    label:"DNSTwist Phishing",    icon:"", ep:"/api/osint/dnstwist",     domainOnly:true},
-    {id:"googledorks", label:"Google Dorks",         icon:"", ep:"/api/osint/googledorks"},
-    {id:"maltego",     label:"Maltego Guide",        icon:"", ep:"/api/osint/maltego"},
-  ];
-
-  const runAll = async () => {
-    if(!target.trim()) return;
-    localStorage.setItem("vtKey", vtKey); localStorage.setItem("abKey", abKey);
-    setRunning(true); setDone([]); setResults({}); setLog([]);
-    addLog("Starting OSINT scan on: "+target);
-    const tgt = target.trim();
-    await Promise.all(TOOLS.map(async t => {
-      if(t.domainOnly && !isDomain(tgt)) { setDone(p=>[...p,t.id]); return; }
-      if(t.userOnly && !isUser(tgt)) { setDone(p=>[...p,t.id]); return; }
-      addLog(`Running ${t.label}...`);
-      try {
-        const body = {target: tgt};
-        if(t.needsVt) body.api_key = vtKey;
-        if(t.needsAb) body.api_key = abKey;
-        const r = await fetch(apiUrl+t.ep, {method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(body)});
-        const data = await r.json();
-        setResults(p=>({...p,[t.id]:data}));
-        addLog(`${t.label} complete`);
-      } catch(e) {
-        addLog(`${t.label} failed: `+e.message);
-        setResults(p=>({...p,[t.id]:{error:e.message}}));
-      }
-      setDone(p=>[...p,t.id]);
-    }));
-    setRunning(false); addLog("All tools complete.");
-  };
-
-  const C = {
-    wrap:    {background:"#020617",minHeight:"100vh",padding:"24px",fontFamily:"monospace"},
-    card:    {background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:10,padding:"16px",marginBottom:14},
-    label:   {fontSize:10,color:"#60a5fa",fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:6},
-    input:   {width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"9px 12px",color:"#e2e8f0",fontSize:13,boxSizing:"border-box"},
-    btn:     {background:running?"#1e3a8a":"#2563eb",color:"#fff",border:"none",borderRadius:8,padding:"10px 28px",fontSize:14,fontWeight:700,cursor:running?"not-allowed":"pointer",marginTop:10},
-    tag:     (c)=>({background:c,color:"#fff",borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700,marginRight:4,display:"inline-block"}),
-    row:     {display:"flex",gap:12,flexWrap:"wrap"},
-    secHdr:  {fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10,borderBottom:"1px solid #1e3a8a",paddingBottom:6},
-    val:     {color:"#e2e8f0",fontSize:12},
-    gray:    {color:"#64748b",fontSize:11},
-    red:     {color:"#ef4444",fontWeight:700},
-    green:   {color:"#22c55e",fontWeight:700},
-  };
-
-  const geo  = results.geoip       || {};
-  const vt   = results.virustotal  || {};
-  const ab   = results.abuseipdb   || {};
-  const mail = results.email_osint || {};
-  const sf   = results.spiderfoot  || {};
-  const rng  = results.recon_ng    || {};
-  const sher = results.sherlock    || {};
-  const malt = results.maltego     || {};
-
-  const allHosts = [...new Set([...(mail.hosts||[]),...(sf.hosts||[]),...(rng.hosts||[])])];
-  const allEmails = [...new Set([...(mail.emails||[]),...(sf.emails||[])])];
-
-  const progress = TOOLS.length > 0 ? Math.round((done.length/TOOLS.length)*100) : 0;
-
-  return (
-    <div style={C.wrap}>
-      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
-      <ToolRefreshButton module="osint" token={token} />
-
-
-
-      <div style={{marginBottom:20}}>
-        <div style={{fontSize:22,fontWeight:900,color:"#60a5fa",letterSpacing:4,marginBottom:4}}>OSINT & THREAT INTEL</div>
-        <div style={{color:"#475569",fontSize:12}}>Email harvesting · GeoIP · VirusTotal · AbuseIPDB · Sherlock · Recon-ng · SpiderFoot</div>
-      </div>
-
-      {/* Config */}
-      <div style={C.card}>
-        <TestTargets targets={MODULE_TEST_TARGETS.osint || []}
-          onSelect={(v) => setTarget(v)}/>
-        <div style={C.row}>
-          <div style={{flex:2}}>
-            <label style={C.label}>Target (Domain / IP / Username for Sherlock)</label>
-            <input style={C.input} value={target} onChange={e=>setTarget(e.target.value)} placeholder="e.g. example.com or 8.8.8.8 or john_doe" autoComplete="off" name="osint-target" data-form-type="other"/>
-          </div>
-          <div style={{flex:1}}>
-            <label style={C.label}>VirusTotal API Key (optional)</label>
-            <input style={C.input} value={vtKey} onChange={e=>setVtKey(e.target.value)} placeholder="VT API key" type="password" autoComplete="off" name="vt-api-key" data-form-type="other"/>
-          </div>
-          <div style={{flex:1}}>
-            <label style={C.label}>AbuseIPDB API Key (optional)</label>
-            <input style={C.input} value={abKey} onChange={e=>setAbKey(e.target.value)} placeholder="AbuseIPDB key" type="password" autoComplete="off" name="ab-api-key" data-form-type="other"/>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10}}>
-          <button style={C.btn} onClick={runAll} disabled={running||!target.trim()} >
-            {running ? `Running... ${progress}%` : "Run All OSINT Tools"}
-          </button>
-          {Object.keys(results).length>0 && !running && (
-            <button style={{...C.btn,background:"#ef4444",marginTop:0}} onClick={() => setShowPDFModal(true)}>
-              Result(pdf)
-            </button>
-          )}
-        </div>
-        {running && (
-          <div style={{marginTop:10,background:"#0f172a",borderRadius:6,padding:8,maxHeight:90,overflowY:"auto"}}>
-            {log.map((l,i)=><div key={i} style={{fontSize:10,color:"#64748b"}}>{l}</div>)}
-          </div>
-        )}
-      </div>
-
-      {Object.keys(results).length > 0 && (<>
-
-        {/* GeoIP + Threat Summary Row */}
-        <div style={C.row}>
-          {geo.ip && (
-            <div style={{...C.card,flex:1}}>
-              <div style={C.secHdr}>GeoIP / Location</div>
-              {[["IP",geo.ip],["Hostname",geo.hostname],["City",geo.city],["Region",geo.region],["Country",geo.country],["ISP",geo.isp],["Org / ASN",geo.org||geo.as_info],["Timezone",geo.timezone],["Coordinates",geo.loc]].filter(([,v])=>v).map(([k,v])=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={C.gray}>{k}</span><span style={C.val}>{v}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {(vt.total_engines||vt.error) && (
-            <div style={{...C.card,flex:1}}>
-              <div style={C.secHdr}>VirusTotal Reputation</div>
-              {vt.error ? <div style={C.red}>{vt.error}</div> : (<>
-                <div style={{fontSize:28,fontWeight:900,color:vt.malicious>0?"#ef4444":"#22c55e",marginBottom:8}}>
-                  {vt.malicious}/{vt.total_engines} <span style={{fontSize:13,fontWeight:400}}>engines flagged</span>
-                </div>
-                {[["Malicious",vt.malicious,"#ef4444"],["Suspicious",vt.suspicious,"#f59e0b"],["Harmless",vt.harmless,"#22c55e"]].map(([k,v,c])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={C.gray}>{k}</span><span style={{color:c,fontWeight:700}}>{v}</span>
-                  </div>
-                ))}
-                {vt.categories?.length>0 && <div style={{marginTop:8}}>{vt.categories.map((c,i)=><span key={i} style={C.tag("#1e3a8a")}>{c}</span>)}</div>}
-              </>)}
-            </div>
-          )}
-          {(ab.abuse_score!==undefined||ab.error) && (
-            <div style={{...C.card,flex:1}}>
-              <div style={C.secHdr}>AbuseIPDB</div>
-              {ab.error ? <div style={C.red}>{ab.error}</div> : (<>
-                <div style={{fontSize:28,fontWeight:900,color:ab.abuse_score>25?"#ef4444":ab.abuse_score>0?"#f59e0b":"#22c55e",marginBottom:8}}>
-                  {ab.abuse_score}% <span style={{fontSize:13,fontWeight:400}}>confidence score</span>
-                </div>
-                {[["IP",ab.ip],["Reports",ab.total_reports],["Country",ab.country],["ISP",ab.isp],["Whitelisted",ab.is_whitelisted?"Yes":"No"]].filter(([,v])=>v!==undefined&&v!=="").map(([k,v])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={C.gray}>{k}</span><span style={C.val}>{String(v)}</span>
-                  </div>
-                ))}
-              </>)}
-            </div>
-          )}
-        </div>
-
-        {/* Emails */}
-        {allEmails.length>0 && (
-          <div style={C.card}>
-            <div style={C.secHdr}>Email Addresses Found ({allEmails.length})</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {allEmails.map((e,i)=><span key={i} style={{...C.tag("#1e3a8a"),fontFamily:"monospace"}}>{e}</span>)}
-            </div>
-          </div>
-        )}
-
-        {/* Subdomains / Hosts */}
-        {allHosts.length>0 && (
-          <div style={C.card}>
-            <div style={C.secHdr}>Subdomains / Hosts Discovered ({allHosts.length})</div>
-            <div style={{columns:3,columnGap:12}}>
-              {allHosts.map((h,i)=><div key={i} style={{color:"#60a5fa",fontSize:12,marginBottom:3,breakInside:"avoid"}}>{h}</div>)}
-            </div>
-          </div>
-        )}
-
-        {/* Sherlock */}
-        {sher.accounts_found && (
-          <div style={C.card}>
-            <div style={C.secHdr}>Social Media Accounts — Sherlock ({sher.total} found for "{sher.username}")</div>
-            {sher.total===0 ? <div style={C.gray}>No accounts found for this username.</div> : (
-              <div style={{columns:2,columnGap:12}}>
-                {sher.accounts_found.map((a,i)=>(
-                  <div key={i} style={{marginBottom:4,breakInside:"avoid"}}>
-                    <a href={a} target="_blank" rel="noreferrer" style={{color:"#34d399",fontSize:12,textDecoration:"none"}}>{a}</a>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* HaveIBeenPwned */}
-        {results.hibp?.checked && (
-          <div style={C.card}>
-            <div style={C.secHdr}>HaveIBeenPwned — Data Breaches</div>
-            {results.hibp.error ? <div style={C.red}>{results.hibp.error}</div> :
-             results.hibp.breaches?.length>0 ? (<>
-              <div style={{...C.tag("#ef4444"),marginBottom:10,fontSize:13}}>{results.hibp.breaches.length} BREACH(ES) FOUND</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
-                {results.hibp.breaches.map((b,i)=><span key={i} style={C.tag("#7f1d1d")}>{b}</span>)}
-              </div>
-            </>) : <div style={C.green}>No breaches found for this domain</div>}
-          </div>
-        )}
-
-        {/* DNSTwist */}
-        {results.dnstwist?.domains?.length>0 && (
-          <div style={C.card}>
-            <div style={C.secHdr}>DNSTwist — Potential Phishing Domains ({results.dnstwist.domains.length} found)</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><tr style={{background:"#1e293b"}}>
-                  {["Domain","Type","IP","Registered"].map(h=><th key={h} style={{padding:"5px 8px",color:"#94a3b8",textAlign:"left",fontWeight:700}}>{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {results.dnstwist.domains.slice(0,30).map((d,i)=>(
-                    <tr key={i} style={{background:i%2===0?"#0f172a":"#1e293b"}}>
-                      <td style={{padding:"4px 8px",color:"#60a5fa"}}>{d.domain}</td>
-                      <td style={{padding:"4px 8px",color:"#94a3b8"}}>{d.fuzzer}</td>
-                      <td style={{padding:"4px 8px",color:"#e2e8f0"}}>{d.dns_a?.[0]||"—"}</td>
-                      <td style={{padding:"4px 8px",color:d.dns_a?"#ef4444":"#22c55e"}}>{d.dns_a?"Yes":"No"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Google Dorks */}
-        {results.googledorks?.dorks?.length>0 && (
-          <div style={C.card}>
-            <div style={C.secHdr}>Google Dorks — Copy & paste into Google</div>
-            {results.googledorks.dorks.map((d,i)=>(
-              <div key={i} style={{background:"#1e293b",borderRadius:6,padding:"6px 10px",marginBottom:6,fontFamily:"monospace",fontSize:11,color:"#60a5fa",cursor:"pointer",wordBreak:"break-all"}}
-                onClick={()=>window.open("https://www.google.com/search?q="+encodeURIComponent(d),"_blank")}>
-                {d}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Maltego guide */}
-        {malt.guide && (
-          <div style={C.card}>
-            <div style={C.secHdr}>Maltego Guide</div>
-            <pre style={{color:"#94a3b8",fontSize:11,whiteSpace:"pre-wrap",margin:0}}>{malt.guide}</pre>
-          </div>
-        )}
-
-        {/* Raw outputs */}
-        {[["theHarvester Raw",mail.raw_output],["SpiderFoot Raw",sf.raw_output],["Recon-ng Raw",rng.raw_output],["Sherlock Raw",sher.raw_output]].filter(([,v])=>v).map(([label,raw])=>(
-          <details key={label} style={{marginBottom:8}}>
-            <summary style={{color:"#475569",fontSize:11,cursor:"pointer",padding:"6px 0"}}>{label}</summary>
-            <pre style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:10,color:"#64748b",fontSize:10,whiteSpace:"pre-wrap",maxHeight:200,overflowY:"auto",margin:0}}>{raw}</pre>
-          </details>
-        ))}
-
-      </>)}
-      <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
-        moduleLabel="OSINT Intelligence Report"
-        onGenerate={cfg => { try { generateOsintPdf(results, target, cfg); } catch(e){ alert("PDF error: "+(e.message||e)); } }}/>
-    </div>
-  );
-}
+// DEAD-LEGACY-OSINT-V1 (2026-11-10): removed the unmounted legacy OsintModule
+// + generateOsintPdf. Its TOOLS palette posted to /api/osint/{email_osint,
+// recon_ng,spiderfoot,virustotal,abuseipdb,sherlock,hibp,googledorks,maltego},
+// none of which is registered in the backend (only geoip/dnstwist exist,
+// and both are covered by OSINT V2 via /api/osint/run_all). The live OSINT
+// module is OsintModuleV2 (ModuleAutoPanel) + generateOsintReport.
 
 // ── CLIENT-SIDE ATTACKS ───────────────────────────────────────
 
@@ -9454,36 +9328,40 @@ const WEBAPP_TOOL_KEYS = [
   "ssti",             "graphql",        "sensitive_data","stored_xss",  "wpscan",
 ];
 
-function synthesizeWebappFindings(allResults) {
-  const r = allResults || {};
-  const findings = [];
-  const seen = new Set();
-  for (const tool of WEBAPP_TOOL_KEYS) {
-    const td = r[tool];
-    if (!td || !Array.isArray(td.findings)) continue;
-    for (const f of td.findings) {
-      const sev = String(f.severity || "").toUpperCase();
-      if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) continue;
-      const detail = f.detail || f.title || "Untitled finding";
-      const dedupKey = tool + ":" + (f.cwe || "") + ":" + detail.substring(0, 80);
-      if (seen.has(dedupKey)) continue;
-      seen.add(dedupKey);
-      findings.push({
+function synthesizeWebappFindings(allResults, authenticated) {
+  // COUNT-SOURCE-V1: same normalisation (CVSS-CALC-V1) + same de-dup
+  // (vlCollectReportFindings) as the PDF, so the in-app counts match the report.
+  const src = allResults || {};
+  const r = {};
+  Object.keys(src).forEach(k => {
+    if (typeof k !== "string" || k.startsWith("_")) return;
+    const v = src[k];
+    if (!v || typeof v !== "object") return;
+    const fs = (v.data && Array.isArray(v.data.findings)) ? v.data.findings : (Array.isArray(v.findings) ? v.findings : null);
+    if (!fs) return;
+    r[k] = {findings: fs.map(f => vlNormalizeFindingCvss(f, authenticated))};
+  });
+  const findings = vlCollectReportFindings(r).findings
+    .filter(f => ["CRITICAL","HIGH","MEDIUM","LOW"].includes(String(f.severity || "").toUpperCase()))
+    .map(f => {
+      const detail = f.detail || f.name || f.title || "Untitled finding";
+      return {
         title:       detail,
         detail:      detail,
-        severity:    sev,
+        severity:    String(f.severity).toUpperCase(),
         cvss:        parseFloat(f.cvss) || 0,
+        cvss_vector: f.cvss_vector || "",
+        cvss_source: f.cvss_source || "",
         cve:         f.cve  || "N/A",
         cwe:         f.cwe  || "N/A",
         cwe_name:    f.cwe_name || "",
         owasp:       f.owasp || "N/A",
         remediation: f.remediation || "",
-        evidence:    f.evidence_marker || "",
+        evidence:    vlRealEvidence(f),   // EVIDENCE-INTEGRITY-V1: "" when only placeholder text
         confidence:  f.confidence || "CONFIRMED",
-        source:      tool,
-      });
-    }
-  }
+        source:      f._tool,
+      };
+    });
   const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
   findings.sort((a, b) => {
     const sa = sevOrder[a.severity] !== undefined ? sevOrder[a.severity] : 5;
@@ -9569,6 +9447,29 @@ function _vlDrawBrandedCover(doc, opts) {
   doc.text("LAB", margin + 32, 18);
   doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
   doc.text(opts.tagline || "Automated Security Assessment Platform", margin + 18, 24);
+  // TARGET-PROFILE-UI-V1: customer branding (engagement profile's
+  // reporting.company_name + uploaded logo) in the top-right of the cover.
+  const brand = opts.brand;
+  if (brand && (brand.company || (brand.logo && brand.logo.dataUrl))) {
+    const bx = pageW - margin, boxW = 46, boxH = 22;
+    let by = 30;
+    if (brand.logo && brand.logo.dataUrl) {
+      try {
+        doc.setFillColor(255,255,255); doc.roundedRect(bx - boxW, 8, boxW, boxH, 2, 2, "F");
+        const lw = brand.logo.w || 4, lh = brand.logo.h || 2;
+        const sc = Math.min((boxW - 4) / lw, (boxH - 4) / lh);
+        const iw = lw * sc, ih = lh * sc;
+        doc.addImage(brand.logo.dataUrl, brand.logo.fmt || "PNG", bx - boxW + (boxW - iw) / 2, 8 + (boxH - ih) / 2, iw, ih);
+        by = 8 + boxH + 5;
+      } catch (_) { by = 30; }
+    }
+    if (brand.company) {
+      doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(148,163,184);
+      doc.text("PREPARED FOR", bx, by, {align:"right"});
+      doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
+      doc.text(_ascii(String(brand.company).substring(0, 48)), bx, by + 4.5, {align:"right"});
+    }
+  }
   // Title block
   doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
   doc.text(_ascii(opts.moduleTitle || "ASSESSMENT REPORT"), pageW/2, 56, {align:"center"});
@@ -9614,13 +9515,6 @@ function _vlDrawBrandedFooter(doc, opts) {
 // ═══════════════════════════════════════════════════════════════
 function generateReconReport({target, allResults, date, authenticated, pdfConfig}) { /*RECON-AUTH-PDF-SIG-V1*/
   // ─── INDUSTRY-STANDARD ENRICHMENT HELPERS ───
-  const _CVSS_VECTORS = {
-    CRITICAL: "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-    HIGH:     "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-    MEDIUM:   "AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L",
-    LOW:      "AV:N/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N",
-    INFO:     ""
-  };
   // MITRE ATT&CK mapping by finding-content pattern
   const _MITRE_MAP = [
     [/whois|domain.?age|registrar/i,                       "T1590.002", "DNS"],
@@ -9732,7 +9626,14 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     ];
   };
 
-  const r = allResults || {};
+  // CVSS-CALC-V1: normalise findings once (copies) so vector/score/severity agree.
+  const r = {};
+  Object.keys(allResults || {}).forEach(k => {
+    const d = allResults[k];
+    r[k] = (d && typeof d === "object" && Array.isArray(d.findings))
+      ? Object.assign({}, d, {findings: d.findings.map(f => vlNormalizeFindingCvss(f, authenticated))})
+      : d;
+  });
   const _cfg = pdfConfig || {};
   const _doGen = () => {
   const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
@@ -10023,7 +9924,9 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _failed = _cnt("FAILED");
   const _skipped= _cnt("SKIPPED");
   const _notrun = _cnt("NOT RUN");
-  const _completeness = _PHASE_DEFS.length - _notrun - _failed;
+  // HONEST-COVERAGE-V1: skipped / not-run / errored phases are NOT clean.
+  const _completeness = _ran + _empty;
+  const _couldNotTest = _skipped + _notrun;
   const _covPct = Math.round(_completeness / _PHASE_DEFS.length * 100);
   const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
 
@@ -10364,10 +10267,10 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
   doc.text(`${_covPct}%`, margin+10, y+11);
   doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
-  doc.text(`${_completeness}/${_PHASE_DEFS.length} phases completed cleanly`, margin+30, y+7);
+  doc.text(`${_completeness}/${_PHASE_DEFS.length} phases tested the target (${_empty} clean, ${_ran} with findings)`, margin+30, y+7);
   doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
   { let _sx = margin+30;
-    const _seg = [[_ran,"DATA",[15,118,82]],[_empty,"EMPTY",[100,116,139]],[_skipped,"SKIPPED",[133,79,11]],[_failed,"ERROR",[162,28,28]]];
+    const _seg = [[_empty,"CLEAN",[15,118,82]],[_ran,"FINDINGS",[194,65,12]],[_couldNotTest,"COULD NOT TEST",[133,79,11]],[_failed,"ERROR",[162,28,28]]];
     _seg.forEach(function(g,gi){
       doc.setTextColor(g[2][0],g[2][1],g[2][2]);
       doc.setFont("Arial","bold"); doc.setFontSize(13); doc.text(String(g[0]), _sx, y+15.5); _sx += doc.getTextWidth(String(g[0]));
@@ -10378,7 +10281,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   y += 23;
   // -- status key legend --
   { let _kx = margin;
-    const _key = [["DATA",[15,118,82],"returned findings"],["EMPTY",[55,65,81],"ran clean, no data"],["SKIPPED",[120,53,15],"not applicable"],["ERROR",[162,28,28],"tool had a problem"]];
+    const _key = [["CLEAN",[15,118,82],"tested, nothing found"],["FINDINGS",[194,65,12],"tested, returned results"],["COULD NOT TEST",[120,53,15],"skipped / missing input"],["ERROR",[162,28,28],"errored - not tested"]];
     _key.forEach(function(it){ doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(it[1][0],it[1][1],it[1][2]); doc.text(it[0],_kx,y+2.5); var lw=doc.getTextWidth(it[0]); doc.setFont("Arial","normal"); doc.setTextColor(100,116,139); doc.text(" "+it[2],_kx+lw,y+2.5); _kx += lw + doc.getTextWidth(" "+it[2]) + 7; });
     y += 6;
   }
@@ -10612,7 +10515,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
                                   && String(f.severity||"").toUpperCase() !== "INFO"; })
       .map(function(f){
         var _nm = String(f.name||f.detail||f.title||"Finding");
-        var _c = _R_cmpFor(_nm, f.cwe);
+        // OWASP-MAP-V1: OWASP token aligned with the OWASP Top 10 grid.
+        var _c = vlAlignOwaspLabel(_R_cmpFor(_nm, f.cwe), vlOwaspCategoryFor(f));
         return {f:f, nm:_nm, cmp: _c || _R_UNMAPPED_LBL};
       })
       .sort(function(a,b){
@@ -10730,15 +10634,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           _cwSeen.add(k); _cwToks.push(k);
         });
         const cw = _cwToks.length ? _cwToks.join(" ") : "-";
-        // CVSS vector breakdown (industry-standard format: AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H)
-        const _CVSS_VECTORS = {
-          CRITICAL: "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-          HIGH:     "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-          MEDIUM:   "AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L",
-          LOW:      "AV:N/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N",
-          INFO:     ""
-        };
-        const cvssVec = String(f.cvss_vector || _CVSS_VECTORS[sev] || "");
+        // CVSS vector: shared CVSS-CALC-V1 helper (own vector, else PR-aware template).
+        const cvssVec = vlCvssVectorLabel(f) || vlCvssVectorLabel(vlNormalizeFindingCvss(f, authenticated));
         // Exploit availability detection — KEV / exploit-db / known-exploit signals
         const _nmEv = String(nm + " " + (f.evidence || "") + " " + (f.references || "")).toLowerCase();
         const _isKEV = /\bkev\b|known.?exploit|cisa.?kev|in.?the.?wild|actively.?exploit/.test(_nmEv);
@@ -10858,11 +10755,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     const _R_owaspMap = {};
     _R_OWASP_2021.forEach(([code]) => _R_owaspMap[code] = []);
     _findings.forEach(f => {
-      const refs = String(f.references || "").toUpperCase();
-      const m = refs.match(/A(\d{1,2})/);
-      if (!m) return;
-      const code = "A" + m[1].padStart(2, "0");
-      if (_R_owaspMap[code]) _R_owaspMap[code].push(f);
+      const code = vlOwaspCategoryFor(f);   // OWASP-MAP-V1 shared mapping
+      if (code && _R_owaspMap[code]) _R_owaspMap[code].push(f);
     });
     const _R_failCats = _R_OWASP_2021.filter(([c]) => _R_owaspMap[c].length > 0).length;
     const _R_passCats = 10 - _R_failCats;
@@ -11064,7 +10958,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const sev = String(f.severity||"INFO").toUpperCase();
         const sevColor = SEV[sev] || SEV.INFO;
         const name = String(f.detail||"");
-        const evidence = String(f.evidence_marker||f.evidence||"");
+        const evidence = vlEvidenceOrNone(f);   // EVIDENCE-INTEGRITY-V1
         const remediation = String(f.remediation||"");
         const cwe = String(f.cwe||"").trim();
         const evLines = doc.splitTextToSize(evidence, 134);
@@ -11103,7 +10997,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         }
         let textY = y + 11;
         // CVSS vector string — small mono
-        const _vec = _CVSS_VECTORS[sev];
+        const _vec = vlCvssVectorLabel(vlNormalizeFindingCvss(f, authenticated));
         if(_vec){
           txt("CVSS: " + _vec, margin+25, textY, 6, [100,116,139], false);
           textY += 3.5;
@@ -12447,7 +12341,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
         txt("EVIDENCE (analyst-supplied):", margin, y+3.5, 7.5, [124,58,237], true); y += 6;
 
-        const ev = _asc(t._f.evidence || "(no evidence text provided)");
+        const ev = _asc(t._f.evidence || VL_NO_EVIDENCE);
         const lines = doc.splitTextToSize(ev, contentW - 4);
         lines.forEach(ln => { chk(5); txt(ln, margin+3, y+3.5, 7.5, [15,23,42]); y += 4; });
         y += 8;
@@ -12816,6 +12710,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
   const [rAutoLoginBusy,setRAutoLoginBusy]       = useState(false);
   const [rAutoLoginStatus,setRAutoLoginStatus]   = useState(null);
   const stopRef = useRef(false);
+  // AUTH-SCOPE-V1: once auth has been used against a host, changing the
+  // target to a different host drops it — never reuse it on another target.
+  const _authHostRef = useRef("");
+  useEffect(() => {
+    const h = vlAuthHost(target);
+    if (_authHostRef.current && h !== _authHostRef.current) {
+      setAuthCookie(""); setAuthBearer(""); _authHostRef.current = "";
+    }
+  }, [target]);
   const logRef  = useRef(null);
 
   const add = l => setLines(p => [...p, l]);
@@ -12851,6 +12754,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
     // RECON-AUTH-RUN-V1 — Step 0: authenticate to target before recon phases
     let sessionCookie = authCookie;
     let sessionBearer = authBearer;
+    if (authCookie || authBearer) _authHostRef.current = vlAuthHost(target);   // AUTH-SCOPE-V1
     if (loginUrl.trim() && loginUser.trim() && loginPass.trim() && !sessionCookie && !sessionBearer) {
       add(`[*] Step 0: authenticating to target ...`);
       try {
@@ -12890,8 +12794,6 @@ function ReconModule({token, onRunningChange, activeSections}) {
       const body = {target};
       if (sessionCookie) body.auth_cookie = sessionCookie;
       if (sessionBearer) body.auth_bearer = sessionBearer;
-      const _shodanKey = localStorage.getItem("shodanApiKey") || "";
-      if (_shodanKey) body.shodan_api_key = _shodanKey;
 
       // Map tool name -> phase index for fast tile updates as events arrive.
       const _toolToIdx = {};
@@ -12901,6 +12803,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
       let _completedCount = 0;
       let _finalSummary = null;
       let _streamError = null;
+      let _authFailedMsg = "";
 
       try {
         const headers = {"Content-Type":"application/json"};
@@ -12946,6 +12849,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
 
             if (evt.event === "scan_started") {
               add(`  ⇒ ${evt.total_tools} tools dispatched, concurrency=${evt.concurrency}`);
+              if (evt.profile) {  // TARGET-PROFILE-UI-V1
+                const pa = evt.profile.auth || {};
+                add(`  ⇒ Engagement profile: ${evt.profile.profile_name || evt.profile.profile_id} — max ${evt.profile.max_rps} req/s, concurrency ${evt.profile.max_concurrency}${evt.profile.destructive_allowed ? "" : ", destructive tests OFF"}${pa.authenticated ? ", logged in as role " + (pa.role || "default") : ", unauthenticated"}`);
+              }
+            }
+            else if (evt.event === "scan_error" || (evt.status === "AUTH_FAILED" && evt.event !== "tool_complete")) {
+              if (!_authFailedMsg) add(`[!] ${evt.status === "AUTH_FAILED" ? "AUTH_FAILED — " : ""}${evt.error || "authentication failed"} — no tools were run.`);
+              _authFailedMsg = evt.error || _authFailedMsg || "authentication failed";
+              if (evt.event === "scan_complete") _finalSummary = evt;
             }
             else if (evt.event === "heartbeat") {
               // Backend's keep-alive ping during long waits — no UI update needed,
@@ -12967,7 +12879,8 @@ function ReconModule({token, onRunningChange, activeSections}) {
               const ph = RECON_PHASES.find(p=>p.tool===evt.tool);
               const phName = ph ? ph.name : evt.tool;
               const status = data._failed ? "" : (data._skipped || data.skipped_reason) ? "○" : "";
-              add(`  ${status} [${_completedCount}/${RECON_PHASES.length}] ${phName} (${evt.duration_sec}s, +${elapsed}s)`);
+              const _sn = vlScopeNote(data);
+              add(`  ${status} [${_completedCount}/${RECON_PHASES.length}] ${phName} (${evt.duration_sec}s, +${elapsed}s)${_sn ? " — " + _sn : ""}`);
             }
             else if (evt.event === "scan_complete") {
               _finalSummary = evt;
@@ -12978,6 +12891,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
         // event (Cloudflare timeout, proxy interrupt, network drop), mark
         // every still-QUEUED tile as failed so the PDF doesn't show "NOT RUN"
         // for tools that simply never reported back.
+        if (!stopRef.current && _authFailedMsg) {
+          // AUTH_FAILED: nothing ran — SKIPPED with reason, never a clean pass.
+          RECON_PHASES.filter(ph => !(ph.tool in results)).forEach(ph => {
+            results[ph.tool] = {ok:true, status:"SKIPPED", _skipped:true, skip_category:"auth_failed",
+                                 skipped_reason:"Not run: " + _authFailedMsg, findings:[], tool:ph.tool};
+            setDone(p=>[...p,_toolToIdx[ph.tool]]);
+          });
+          setAll(Object.assign({},results));
+        }
         if (!stopRef.current && !_finalSummary) {
           const missing = RECON_PHASES.filter(ph => !(ph.tool in results));
           if (missing.length > 0) {
@@ -13042,7 +12964,6 @@ function ReconModule({token, onRunningChange, activeSections}) {
         const body = {target};
         if (sessionCookie) body.auth_cookie = sessionCookie;  // RECON-AUTH-BODY-V1
         if (sessionBearer) body.auth_bearer = sessionBearer;
-        if (ph.tool==="shodan") body.api_key = localStorage.getItem("shodanApiKey")||"";
         if (ph.tool==="shodan" && !body.api_key) {
           add("Shodan: no API key — set it in Settings");
           // Save explicit skip so the PDF coverage shows "no API key" not just missing
@@ -13155,7 +13076,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.4,marginBottom:6}}>{f.description}</div>
                   {f.evidence && (
                     <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
-                      <span style={{color:"#94a3b8",fontWeight:700}}>Evidence: </span>{f.evidence}
+                      <span style={{color:"#94a3b8",fontWeight:700}}>Evidence: </span>{vlEvidenceOrNone(f)}
                     </div>
                   )}
                   {f.remediation && (
@@ -13800,90 +13721,11 @@ function ReconModule({token, onRunningChange, activeSections}) {
 //   moduleKey, moduleLabel, moduleTitle, moduleSubtitle, playbookPath,
 //   reportPrefix (e.g. "VULN"), methodology[], references[],
 //   normaliseResults(allResults) -> { toolKey: {findings:[], summary?:{}, ...} }
-function generateUniversalVLReport(opts) {
-  const target         = opts.target;
-  const allResultsRaw  = opts.allResults || {};
-  const date           = opts.date || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
-  const authenticated  = !!opts.authenticated;
-  const inconclusive   = !!opts.inconclusive;
-  const inconclusiveReason = opts.inconclusiveReason ||
-    "Scan ran unauthenticated against a login-gated application — only the public surface was tested, so the result is not representative.";
-  const pdfConfig      = opts.pdfConfig || {};
-  const moduleKey      = opts.moduleKey      || "module";
-  const moduleLabel    = opts.moduleLabel    || "Security Assessment";
-  const moduleTitle    = opts.moduleTitle    || (moduleLabel + " REPORT").toUpperCase();
-  const moduleSubtitle = opts.moduleSubtitle || "Security Assessment";
-  const reportPrefix   = (opts.reportPrefix || moduleKey || "VL").toUpperCase().replace(/[^A-Z0-9]/g,"").substring(0,8) || "MOD";
-  const playbookPath   = opts.playbookPath   || "";
-  const methodology    = opts.methodology    || [
-    "Assessment follows industry-standard penetration testing methodology (PTES, OWASP, NIST SP 800-115).",
-    "Every finding is independently triggered and re-confirmed by the VulnusLab engine; no template-only matches.",
-    "Manual review is still required for full exploitation context and business-impact rating."
-  ];
-  const references     = opts.references     || [
-    "OWASP Top 10 (2021) — https://owasp.org/Top10/",
-    "NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final",
-    "MITRE ATT&CK — https://attack.mitre.org",
-    "CWE — https://cwe.mitre.org",
-    "CVSS v3.1 — https://www.first.org/cvss/v3.1/specification-document"
-  ];
-
-  // ── Normalise allResults into { toolKey: {findings:[], summary?:{}, _failed?:bool, _skipped?:bool, error?:str, skipped_reason?:str} } ──
-  let r = {};
-  if (typeof opts.normaliseResults === "function") {
-    try { r = opts.normaliseResults(allResultsRaw) || {}; } catch(_) { r = {}; }
-  } else {
-    Object.keys(allResultsRaw || {}).forEach(k => {
-      if (typeof k !== "string" || k.startsWith("_")) return;
-      const v = allResultsRaw[k];
-      if (!v || typeof v !== "object") return;
-      // ModuleAutoPanel shape: {status, severity, data:{findings:[]}, tier}
-      if (v.data && Array.isArray(v.data.findings)) {
-        // Backend-honest SKIPPED: the per-tool response may carry
-        // {_skipped:true, skipped_reason:"..."} when the scanner had no
-        // applicable input (e.g. kubeconfig probe on a registry target).
-        // Propagate that into the PDF coverage table so the scanner falls
-        // into the SKIPPED bucket instead of inflating "DATA".
-        const _backendSkipped = !!(v.data._skipped || v.data.skipped_reason);
-        r[k] = {
-          findings: v.data.findings,
-          summary: v.data.summary || null,
-          tier: v.tier || null,
-          _failed: v.status === "error",
-          _skipped: v.status === "queued" || _backendSkipped,
-          skipped_reason: v.data.skipped_reason || null,
-          error: v.message || null,
-        };
-        return;
-      }
-      // Flat shape: {findings:[], ...} — also honour the backend SKIPPED flag
-      if (Array.isArray(v.findings)) {
-        const _backendSkipped = !!(v._skipped || v.skipped_reason);
-        r[k] = Object.assign({}, v, {
-          _skipped: _backendSkipped || v._skipped,
-          skipped_reason: v.skipped_reason || null,
-        });
-        return;
-      }
-      // Empty/null tool — represent as ran-empty
-      r[k] = {findings: []};
-    });
-  }
-
-  // ── ASCII safety net (jsPDF can't render most Unicode) ──
-  const _ascii = s => String(s == null ? "" : s)
-    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
-    .replace(/[✀-➿]/g, "")
-    .replace(/[←-⇿]/g, "")
-    .replace(/[─-╿]/g, "")
-    .replace(/[▀-▟]/g, "")
-    .replace(/[■-◿]/g, "")
-    .replace(/[☀-⛿]/g, "")
-    .replace(/[—–]/g, "-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[·]/g, "-");
-
+// ─── COUNT-SOURCE-V1: shared finding collection + de-dup ───
+// Used by generateUniversalVLReport AND synthesizeWebappFindings (in-app
+// Findings tab) so both always show the same finding count. Input r is
+// {toolKey: {findings: [...]}} with findings already CVSS-normalised.
+function vlCollectReportFindings(r) {
   // ── Collect findings + risk math ──
   const _allFindings = [];
   Object.keys(r).forEach(toolKey => {
@@ -14090,12 +13932,120 @@ function generateUniversalVLReport(opts) {
     });
     _allFindings.splice(0, _allFindings.length, ...ungrouped, ...rolled);
   })();
+  return {findings: _allFindings, cveClusters: _cveClusters};
+}
+
+function generateUniversalVLReport(opts) {
+  const target         = opts.target;
+  const allResultsRaw  = opts.allResults || {};
+  const date           = opts.date || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
+  const authenticated  = !!opts.authenticated;
+  const inconclusive   = !!opts.inconclusive;
+  const inconclusiveReason = opts.inconclusiveReason ||
+    "Scan ran unauthenticated against a login-gated application — only the public surface was tested, so the result is not representative.";
+  const pdfConfig      = opts.pdfConfig || {};
+  // TARGET-PROFILE-UI-V1: customer branding from the engagement profile the
+  // scan ran under (null when the scan used no profile -> VulnusLab only).
+  const _brand         = opts.branding !== undefined ? opts.branding : vlReportBranding();
+  const moduleKey      = opts.moduleKey      || "module";
+  const moduleLabel    = opts.moduleLabel    || "Security Assessment";
+  const moduleTitle    = opts.moduleTitle    || (moduleLabel + " REPORT").toUpperCase();
+  const moduleSubtitle = opts.moduleSubtitle || "Security Assessment";
+  const reportPrefix   = (opts.reportPrefix || moduleKey || "VL").toUpperCase().replace(/[^A-Z0-9]/g,"").substring(0,8) || "MOD";
+  const playbookPath   = opts.playbookPath   || "";
+  const methodology    = opts.methodology    || [
+    "Automated assessment aligned with industry-standard testing methodology (PTES, OWASP, NIST SP 800-115); it is not a manual penetration test.",
+    "Every finding is independently triggered and re-confirmed by the VulnusLab engine; no template-only matches.",
+    "Manual review is still required for full exploitation context and business-impact rating."
+  ];
+  const references     = opts.references     || [
+    "OWASP Top 10 (2021) — https://owasp.org/Top10/",
+    "NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final",
+    "MITRE ATT&CK — https://attack.mitre.org",
+    "CWE — https://cwe.mitre.org",
+    "CVSS v3.1 — https://www.first.org/cvss/v3.1/specification-document"
+  ];
+
+  // ── Normalise allResults into { toolKey: {findings:[], summary?:{}, _failed?:bool, _skipped?:bool, error?:str, skipped_reason?:str} } ──
+  let r = {};
+  if (typeof opts.normaliseResults === "function") {
+    try { r = opts.normaliseResults(allResultsRaw) || {}; } catch(_) { r = {}; }
+  } else {
+    Object.keys(allResultsRaw || {}).forEach(k => {
+      if (typeof k !== "string" || k.startsWith("_")) return;
+      const v = allResultsRaw[k];
+      if (!v || typeof v !== "object") return;
+      // ModuleAutoPanel shape: {status, severity, data:{findings:[]}, tier}
+      if (v.data && Array.isArray(v.data.findings)) {
+        // Backend-honest SKIPPED: the per-tool response may carry
+        // {_skipped:true, skipped_reason:"..."} when the scanner had no
+        // applicable input (e.g. kubeconfig probe on a registry target).
+        // Propagate that into the PDF coverage table so the scanner falls
+        // into the SKIPPED bucket instead of inflating "DATA".
+        const _backendSkipped = !!(v.data._skipped || v.data.skipped_reason);
+        r[k] = {
+          findings: v.data.findings,
+          summary: v.data.summary || null,
+          tier: v.tier || null,
+          _failed: v.status === "error",
+          _skipped: v.status === "queued" || _backendSkipped,
+          skipped_reason: v.data.skipped_reason || null,
+          error: v.message || null,
+        };
+        return;
+      }
+      // Flat shape: {findings:[], ...} — also honour the backend SKIPPED flag
+      if (Array.isArray(v.findings)) {
+        const _backendSkipped = !!(v._skipped || v.skipped_reason);
+        r[k] = Object.assign({}, v, {
+          _skipped: _backendSkipped || v._skipped,
+          skipped_reason: v.skipped_reason || null,
+        });
+        return;
+      }
+      // Empty/null tool — represent as ran-empty
+      r[k] = {findings: []};
+    });
+  }
+  // CVSS-CALC-V1: normalise every finding ONCE (copies, never React state) so
+  // vector, score and severity agree everywhere below — counts, tables,
+  // per-tool panels and compliance all read the same severity.
+  Object.keys(r).forEach(k => {
+    const d = r[k];
+    if (!d || !Array.isArray(d.findings)) return;
+    r[k] = Object.assign({}, d, {findings: d.findings.map(f => vlNormalizeFindingCvss(f, authenticated))});
+  });
+
+  // ── ASCII safety net (jsPDF can't render most Unicode) ──
+  const _ascii = s => String(s == null ? "" : s)
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+    .replace(/[✀-➿]/g, "")
+    .replace(/[←-⇿]/g, "")
+    .replace(/[─-╿]/g, "")
+    .replace(/[▀-▟]/g, "")
+    .replace(/[■-◿]/g, "")
+    .replace(/[☀-⛿]/g, "")
+    .replace(/[—–]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[·]/g, "-");
+
+  // ── Collect findings + de-dup ──
+  // COUNT-SOURCE-V1: collection + de-dup moved verbatim into the shared
+  // vlCollectReportFindings() so the in-app Findings view counts exactly
+  // what this report counts (one source for every "N findings" number).
+  const {findings: _allFindings, cveClusters: _cveClusters} = vlCollectReportFindings(r);
 
   const _sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
   _allFindings.forEach(f => {
     const k = String(f.severity||"INFO").toUpperCase();
     _sevCount[k] = (_sevCount[k]||0) + 1;
   });
+  // COUNT-SOURCE-V1: the ONE "N findings" number used everywhere in this
+  // report = de-duplicated CRITICAL+HIGH+MEDIUM+LOW from _allFindings (after
+  // CVSS normalisation). INFO / POSITIVE are reported separately as
+  // informational and never folded into the findings total.
+  const _findingsTotal = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
 
   // ── INPUT TRACEABILITY (function-scope so every section can cite it) ──
   // Detect which inputs were actually supplied for this scan by looking at
@@ -14274,7 +14224,7 @@ function generateUniversalVLReport(opts) {
     doc.text(_ascii(t), x, yy, {align: align || "left"});
   };
   const drawHeader = () => {
-    txt("VulnusLab - " + moduleLabel + " Report", margin, 10, 7, GRAY);
+    txt((_brand && _brand.company ? _brand.company + " | " : "") + "VulnusLab - " + moduleLabel + " Report", margin, 10, 7, GRAY);
     txt(date, pageW - margin, 10, 7, BLUE, false, "right");
   };
   const chk = n => { if (y + n > 278) { doc.addPage(); y = 18; drawHeader(); } };
@@ -14308,7 +14258,7 @@ function generateUniversalVLReport(opts) {
     pageW, contentW, margin,
     moduleTitle, moduleSubtitle,
     tagline: "Automated Vulnerability Assessment Platform",
-    target, _ascii,
+    target, _ascii, brand: _brand,
   });
 
   // Info table
@@ -14319,17 +14269,25 @@ function generateUniversalVLReport(opts) {
   // VA vs PT label for Report Type — drives compliance framing
   // (SOC 2 CC4.1 = VA, CC4.2 = PT; PCI-DSS 11.4 = PT).
   const _moduleType = (typeof MODULE_TYPE !== "undefined" && MODULE_TYPE[moduleKey]) || "VA";
+  // HONEST-LABEL-V1: this generator only produces AUTOMATED reports (the
+  // manual pentest report is generateManualTestsReport) — never call it a
+  // "Penetration Test". PT-class modules are labelled by probe depth only.
   const _reportTypeLabel = _moduleType === "PT"
-    ? `${moduleLabel} - Penetration Test [PT]`
+    ? `${moduleLabel} - Automated Vulnerability Assessment [active exploitation probes]`
     : _moduleType === "VA+"
-    ? `${moduleLabel} - Vulnerability Assessment [VA+ light active probing]`
-    : `${moduleLabel} - Vulnerability Assessment [VA]`;
+    ? `${moduleLabel} - Automated Vulnerability Assessment [VA+ light active probing]`
+    : `${moduleLabel} - Automated Vulnerability Assessment [VA]`;
   [
     ["Target", target || "(none)"],
     ["Scan Date", date],
     ["Classification", "CONFIDENTIAL"],
     ["Report Type", _reportTypeLabel],
-    ["Authenticated", authenticated ? "Yes - scanned with captured session" : "No - public surface only"]
+    ["Authenticated", authenticated ? "Yes - scanned with captured session" : "No - public surface only"],
+    ...(_brand ? [
+      ["Prepared For", _brand.company || _brand.profileName || "-"],
+      ["Engagement Profile", _brand.profileName || _brand.profileId || "-"],
+      ["Authorization", _brand.authorization || "Per-scan acknowledgment (no valid signed record)"],
+    ] : []),
   ].forEach((row, i) => {
     fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
     txt(row[0], margin + 3, y + 5.5, 8.5, GRAY, true);
@@ -14595,8 +14553,9 @@ function generateUniversalVLReport(opts) {
   doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._displayColor);
   doc.text(_displayScore, margin + 8, y + 15);
   txt(_displayLabel, margin + 38, y + 8, 11, _displayColor, true);
-  const _totalCount = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW + _sevCount.INFO;
-  txt(`Report ID: ${_REPORT_ID}  -  ${_totalCount} findings across ${Object.keys(r).length} scanners`, margin + 38, y + 14, 7.5, GRAY);
+  // COUNT-SOURCE-V1: same total as Risk Matrix / Detailed Findings / Compliance.
+  const _infoTotal = Math.max(0, _realInfoCount);
+  txt(`Report ID: ${_REPORT_ID}  -  ${_findingsTotal} finding(s)${_infoTotal ? ` + ${_infoTotal} informational` : ""} across ${Object.keys(r).length} scanners`, margin + 38, y + 14, 7.5, GRAY);
   fillR(margin + 38, y + 17, contentW - 40, 2, [226,232,240]);
   if (!_insufficientScan) {
     fillR(margin + 38, y + 17, Math.max((_riskScore/100) * (contentW - 40), 2), 2, _displayColor);
@@ -14825,8 +14784,17 @@ function generateUniversalVLReport(opts) {
       const _topName2 = _top3.length > 1
         ? String(_top3[1].detail || _top3[1].name || _top3[1].title || "").substring(0, 90)
         : "";
-      const _totalReal = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
+      const _totalReal = _findingsTotal;   // COUNT-SOURCE-V1
       const _scannerCount = Object.keys(r).length;
+      // HONEST-COVERAGE-V1: scanners that actually tested the target (not
+      // skipped / errored / all-skip-marker) — used for the clean-result claim.
+      const _actuallyTestedCount = Object.keys(r).filter(k => {
+        const d = r[k];
+        if (!d || d._failed || d._skipped || d.skipped_reason) return false;
+        const fs = Array.isArray(d.findings) ? d.findings : [];
+        return !(fs.length > 0 && fs.every(f => String(f.severity||"INFO").toUpperCase() === "INFO"
+          && _SKIP_PATTERNS.some(re => re.test(String(f.evidence||"") + " " + String(f.name||"") + " " + String(f.detail||"")))));
+      }).length;
       const _paragraphs = [];
       if (_insufficientScan) {
         _paragraphs.push(
@@ -14877,8 +14845,8 @@ function generateUniversalVLReport(opts) {
         );
       } else {
         _paragraphs.push(
-          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed cleanly across ${_scannerCount} scanner(s) with zero CRITICAL, HIGH, MEDIUM, or LOW findings. The target's externally-visible attack surface is well-managed against the vulnerability classes covered by this module's probes.`,
-          `The Scan Coverage section (section 7) details the per-probe breakdown - which scanners returned DATA, ran EMPTY (clean), were SKIPPED (not applicable), or ERROR'd. Review that section to confirm coverage matches expectations for your environment.`,
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'}: ${_actuallyTestedCount} of ${_scannerCount} scanner(s) actually tested the target and produced zero CRITICAL, HIGH, MEDIUM, or LOW findings${_actuallyTestedCount < _scannerCount ? `; the remaining ${_scannerCount - _actuallyTestedCount} could not test (skipped or errored) and are NOT counted as clean` : ""}. Within the vulnerability classes those probes exercised, no exposure was detected.`,
+          `The Scan Coverage section details the per-probe breakdown - which scanners tested CLEAN, returned FINDINGS, COULD NOT TEST (skipped / missing input), or ERROR'd. Review that section to confirm coverage matches expectations for your environment.`,
           `Recommended next steps: maintain continuous monitoring on the corresponding control areas (WAF, SIEM, CSPM, DAST/SAST) and quarterly re-scan cadence to catch configuration drift. A clean scan today does not preclude future exposure as the environment evolves.`
         );
       }
@@ -15186,25 +15154,13 @@ function generateUniversalVLReport(opts) {
         ["A10", "Server-Side Request Forgery"],
       ];
       // CWE -> OWASP A0X mapping. Findings without a recognised CWE land in "Other".
-      const _CWE_TO_OWASP = {
-        "CWE-22":"A01","CWE-23":"A01","CWE-284":"A01","CWE-285":"A01","CWE-639":"A01","CWE-862":"A01","CWE-863":"A01","CWE-538":"A01","CWE-200":"A01","CWE-601":"A01",
-        "CWE-261":"A02","CWE-296":"A02","CWE-310":"A02","CWE-319":"A02","CWE-321":"A02","CWE-322":"A02","CWE-323":"A02","CWE-324":"A02","CWE-325":"A02","CWE-326":"A02","CWE-327":"A02","CWE-328":"A02","CWE-329":"A02","CWE-330":"A02","CWE-331":"A02","CWE-335":"A02","CWE-336":"A02","CWE-337":"A02","CWE-338":"A02","CWE-340":"A02","CWE-347":"A02","CWE-523":"A02","CWE-720":"A02","CWE-757":"A02","CWE-759":"A02","CWE-760":"A02","CWE-780":"A02","CWE-818":"A02","CWE-916":"A02",
-        "CWE-20":"A03","CWE-74":"A03","CWE-75":"A03","CWE-77":"A03","CWE-78":"A03","CWE-79":"A03","CWE-80":"A03","CWE-83":"A03","CWE-87":"A03","CWE-88":"A03","CWE-89":"A03","CWE-90":"A03","CWE-91":"A03","CWE-93":"A03","CWE-94":"A03","CWE-95":"A03","CWE-96":"A03","CWE-97":"A03","CWE-98":"A03","CWE-99":"A03","CWE-100":"A03","CWE-113":"A03","CWE-116":"A03","CWE-138":"A03","CWE-184":"A03","CWE-470":"A03","CWE-471":"A03","CWE-564":"A03","CWE-610":"A03","CWE-643":"A03","CWE-644":"A03","CWE-652":"A03","CWE-917":"A03","CWE-943":"A03",
-        "CWE-209":"A04","CWE-256":"A04","CWE-501":"A04","CWE-522":"A04","CWE-525":"A04","CWE-539":"A04","CWE-579":"A04","CWE-598":"A04","CWE-602":"A04","CWE-642":"A04","CWE-646":"A04","CWE-650":"A04","CWE-653":"A04","CWE-656":"A04","CWE-657":"A04","CWE-799":"A04","CWE-840":"A04","CWE-841":"A04",
-        "CWE-2":"A05","CWE-11":"A05","CWE-13":"A05","CWE-15":"A05","CWE-16":"A05","CWE-260":"A05","CWE-315":"A05","CWE-520":"A05","CWE-526":"A05","CWE-537":"A05","CWE-541":"A05","CWE-547":"A05","CWE-611":"A05","CWE-614":"A05","CWE-693":"A05","CWE-756":"A05","CWE-776":"A05","CWE-942":"A05","CWE-1004":"A05","CWE-1032":"A05","CWE-1021":"A05","CWE-1174":"A05","CWE-1275":"A05",
-        "CWE-937":"A06","CWE-1035":"A06","CWE-1104":"A06","CWE-1395":"A06","CWE-353":"A06",
-        "CWE-255":"A07","CWE-259":"A07","CWE-287":"A07","CWE-288":"A07","CWE-290":"A07","CWE-294":"A07","CWE-295":"A07","CWE-297":"A07","CWE-300":"A07","CWE-302":"A07","CWE-304":"A07","CWE-306":"A07","CWE-307":"A07","CWE-346":"A07","CWE-384":"A07","CWE-521":"A07","CWE-613":"A07","CWE-620":"A07","CWE-640":"A07","CWE-798":"A07",
-        "CWE-345":"A08","CWE-353":"A08","CWE-426":"A08","CWE-494":"A08","CWE-502":"A08","CWE-565":"A08","CWE-784":"A08","CWE-829":"A08","CWE-830":"A08","CWE-915":"A08",
-        "CWE-117":"A09","CWE-223":"A09","CWE-532":"A09","CWE-778":"A09",
-        "CWE-918":"A10",
-      };
+      // OWASP-MAP-V1: vlOwaspCategoryFor() (CWE map, then name fallback) is the
+      // single source — the per-finding Compliance Mapping table uses it too.
       const _owaspMap = { A01:[], A02:[], A03:[], A04:[], A05:[], A06:[], A07:[], A08:[], A09:[], A10:[] };
       _allFindings.forEach(f => {
         const sev = String(f.severity||"").toUpperCase();
         if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) return;
-        const cwe = String(f.cwe||"").trim().toUpperCase().match(/CWE-\d+/);
-        if (!cwe) return;
-        const owasp = _CWE_TO_OWASP[cwe[0]];
+        const owasp = vlOwaspCategoryFor(f);
         if (owasp && _owaspMap[owasp]) _owaspMap[owasp].push(f);
       });
       const _passCats = Object.values(_owaspMap).filter(arr => arr.length === 0).length;
@@ -15519,7 +15475,11 @@ function generateUniversalVLReport(opts) {
   });
   const _cnt = s => _coverageRows.filter(p => p.status === s).length;
   const _ran = _cnt("RAN"), _empty = _cnt("EMPTY"), _failed = _cnt("FAILED"), _skipped = _cnt("SKIPPED"), _notrun = _cnt("NOT RUN");
-  const _completeness = _phaseDefs.length - _notrun - _failed;
+  // HONEST-COVERAGE-V1: only scanners that actually TESTED the target count
+  // toward coverage. SKIPPED / not-run ("could not test") and errored
+  // scanners are reported separately and never presented as clean.
+  const _completeness = _ran + _empty;   // tested (with findings + clean)
+  const _couldNotTest = _skipped + _notrun;
   const _covPct = _phaseDefs.length > 0 ? Math.round(_completeness / _phaseDefs.length * 100) : 0;
   const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
 
@@ -15529,9 +15489,9 @@ function generateUniversalVLReport(opts) {
   doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
   doc.text(`${_covPct}%`, margin + 10, y + 11);
   doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
-  doc.text(`${_completeness}/${_phaseDefs.length} scanners completed cleanly`, margin + 30, y + 7);
+  doc.text(`${_completeness}/${_phaseDefs.length} scanners tested the target (${_empty} clean, ${_ran} with findings)`, margin + 30, y + 7);
   { let _sx = margin + 30;
-    const _seg = [[_ran,"DATA",[15,118,82]],[_empty,"EMPTY",[100,116,139]],[_skipped,"SKIPPED",[133,79,11]],[_failed,"ERROR",[162,28,28]]];
+    const _seg = [[_empty,"CLEAN",[15,118,82]],[_ran,"FINDINGS",[194,65,12]],[_couldNotTest,"COULD NOT TEST",[133,79,11]],[_failed,"ERROR",[162,28,28]]];
     _seg.forEach(function(g, gi){
       doc.setTextColor(g[2][0], g[2][1], g[2][2]);
       doc.setFont("Arial","bold"); doc.setFontSize(13); doc.text(String(g[0]), _sx, y + 15.5); _sx += doc.getTextWidth(String(g[0]));
@@ -15542,7 +15502,7 @@ function generateUniversalVLReport(opts) {
   y += 23;
   // Status key legend
   { let _kx = margin;
-    const _key = [["DATA",[15,118,82],"returned findings"],["EMPTY",[55,65,81],"ran clean, no data"],["SKIPPED",[120,53,15],"not applicable"],["ERROR",[162,28,28],"tool had a problem"]];
+    const _key = [["CLEAN",[15,118,82],"tested, nothing found"],["FINDINGS",[194,65,12],"tested, returned results"],["COULD NOT TEST",[120,53,15],"skipped / missing input"],["ERROR",[162,28,28],"errored - not tested"]];
     _key.forEach(function(it){
       doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(it[1][0],it[1][1],it[1][2]); doc.text(it[0], _kx, y + 2.5);
       var lw = doc.getTextWidth(it[0]);
@@ -15722,7 +15682,8 @@ function generateUniversalVLReport(opts) {
                                   && String(f.severity||"").toUpperCase() !== "INFO"; })
       .map(function(f){
         var _nm = String(f.name||f.detail||f.title||"Finding");
-        var _c = _cmpFor(_nm, f.cwe);
+        // OWASP-MAP-V1: OWASP token aligned with the OWASP Top 10 grid.
+        var _c = vlAlignOwaspLabel(_cmpFor(_nm, f.cwe), vlOwaspCategoryFor(f));
         return {f:f, nm:_nm, cmp: _c || _UNMAPPED_LBL};
       })
       .sort(function(a,b){
@@ -15858,33 +15819,24 @@ function generateUniversalVLReport(opts) {
       // Per-row helpers: extract CVE id, CVSS vector, EPSS, KEV flag, and
       // affected Asset:Port from the finding's evidence/name fields.
       const _cveRe = /(CVE-\d{4}-\d{4,7})/i;
-      const _vectorRe = /(CVSS:?[23]\.[01]\/[A-Z:/]+)/;
       const _epssRe = /EPSS[:\s]+([0-9.]+%?)/i;
       const _kevRe = /\bKEV\b|known exploited/i;
       const _portRe = /(?:port|tcp|udp|:)\s*(\d{1,5})\b/i;
-      // Auto-derive a CVSS vector from severity when the finding doesn't
-      // carry one in evidence (most don't). Lets every finding display the
-      // industry-standard AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N notation that
-      // Nessus / Qualys reports include on each finding row.
-      const _CVSS_VEC_BY_SEV = {
-        CRITICAL: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-        HIGH:     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-        MEDIUM:   "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L",
-        LOW:      "CVSS:3.1/AV:N/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N",
-        INFO:     "",
-      };
+      // CVSS-CALC-V1: the vector now comes from the shared calculator
+      // (vlNormalizeFindingCvss, applied to r{} at the top of this function):
+      // the finding's own vector when it has one, else a severity template
+      // with PR:N/PR:L chosen by auth context and marked "(est.)". The CVSS
+      // score column is the computed score of exactly this vector.
       const _extract = (f) => {
         const blob = [f.name, f.detail, f.evidence, f.evidence_marker, f.title]
           .map(x => String(x || "")).join(" ");
         const mCve = blob.match(_cveRe);
-        const mVec = blob.match(_vectorRe);
         const mEpss = blob.match(_epssRe);
         const isKev = _kevRe.test(blob);
         const mPort = blob.match(_portRe);
-        const sevU = String(f.severity || "").toUpperCase();
         return {
           cve: mCve ? mCve[1].toUpperCase() : "-",
-          vector: mVec ? mVec[1] : (_CVSS_VEC_BY_SEV[sevU] || ""),
+          vector: vlCvssVectorLabel(f),
           epss: mEpss ? mEpss[1] : "",
           kev: isKev,
           port: mPort ? mPort[1] : "",
@@ -16068,7 +16020,7 @@ function generateUniversalVLReport(opts) {
         txt(cw, margin + 162, y + 4.2, 7.2, DARK, true);
         // Bottom row - meta line
         const _metaParts = [];
-        if (x.vector) _metaParts.push(x.vector.substring(0, 40));
+        if (x.vector) _metaParts.push(x.vector);
         if (x.epss) _metaParts.push(`EPSS ${x.epss}`);
         if (x.kev) _metaParts.push("CISA KEV");
         // ASSET-PORT-DEDUP — x.host may already carry the port (e.g.
@@ -16189,8 +16141,10 @@ function generateUniversalVLReport(opts) {
       const toolName = toolKey.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
       chk(20);
       fillR(margin, y, contentW, 7, [30,41,59]);
+      // COUNT-SOURCE-V1: per-scanner panels show RAW scanner output (before
+      // cross-scanner de-dup), so label them as results, not report findings.
       const _hdrLbl = _fs.length > 0
-        ? toolName + "  -  " + _fs.length + " finding(s)"
+        ? toolName + "  -  " + _fs.length + " raw result(s)"
         : toolName + "  -  intel only";
       txt(_hdrLbl, margin + 4, y + 5, 9, WHITE, true);
       y += 9;
@@ -16207,8 +16161,15 @@ function generateUniversalVLReport(opts) {
         txt(sev, margin + 13, y + 5, 6.5, WHITE, true, "center");
         const det = _dedupCodes(String(f.detail||f.name||f.title||"")).substring(0,110);
         txt(det, margin + 27, y + 4.5, 7.5, DARK);
-        if (f.evidence_marker) {
-          txt("Evidence: " + String(f.evidence_marker).substring(0,90), margin + 27, y + 7.2, 6.5, GRAY);
+        // EVIDENCE-INTEGRITY-V1: only real captured evidence is shown as
+        // evidence; placeholder/template text becomes "No captured evidence".
+        {
+          const _evReal = vlRealEvidence(f);
+          if (_evReal) {
+            txt("Evidence: " + _evReal.substring(0,90), margin + 27, y + 7.2, 6.5, GRAY);
+          } else if (!["INFO","POSITIVE"].includes(sev)) {
+            txt("Evidence: " + VL_NO_EVIDENCE, margin + 27, y + 7.2, 6.5, [180,83,9]);
+          }
         }
         y += 8;
       });
@@ -16354,7 +16315,7 @@ function generateUniversalVLReport(opts) {
     ["HIGH",     "7.0 - 8.9",  "Patch within 7 days",   _sevCount.HIGH,     [194,65,12]],
     ["MEDIUM",   "4.0 - 6.9",  "Patch within 30 days",  _sevCount.MEDIUM,   [202,138,4]],
     ["LOW",      "0.1 - 3.9",  "Patch within 90 days",  _sevCount.LOW,      [55,65,81]],
-    ["INFO",     "0.0",        "Awareness / hardening",  _sevCount.INFO,    [100,116,139]],
+    ["INFO",     "0.0",        "Awareness / hardening",  Math.max(0, _realInfoCount),    [100,116,139]],   // COUNT-SOURCE-V1
   ];
   _matrix.forEach((row, i) => {
     chk(7); fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
@@ -16463,7 +16424,7 @@ function generateUniversalVLReport(opts) {
       _mtAttested.forEach((mt, i) => {
         const st = mt._state.status;
         const sev = mt._state.severity || "INFO";
-        const ev = mt._state.evidence || "(no evidence text provided)";
+        const ev = mt._state.evidence || VL_NO_EVIDENCE;
         const evLines = doc.splitTextToSize(_ascii(ev), contentW - 12);
         const headerH = 14;
         const bodyH = Math.max(10, evLines.length * 3.6 + 4);
@@ -16498,7 +16459,7 @@ function generateUniversalVLReport(opts) {
                         : _partialScan ? `PARTIAL SCAN - ${_testedCount} of ${_totalScannerCount} scanners confirmed clean; ${_untestedCount} need inputs`
                         : `${_riskLabel}`;
   txt(`Recommended re-test cadence: ${_cad}`, margin + 4, y + 8, 9, DARK, true);
-  txt(`Overall posture: ${_conclPosture}. Total findings: ${_totalCount} across ${Object.keys(r).length} scanners.`, margin + 4, y + 14, 8, GRAY);
+  txt(`Overall posture: ${_conclPosture}. Total findings: ${_findingsTotal}${Math.max(0, _realInfoCount) ? ` (+${Math.max(0, _realInfoCount)} informational)` : ""} across ${Object.keys(r).length} scanners.`, margin + 4, y + 14, 8, GRAY);
   txt("This report is valid for 90 days from generation date. Re-scan to refresh.", margin + 4, y + 19, 7.5, GRAY);
   y += 28;
 
@@ -17871,7 +17832,8 @@ function generateExploitReport({results, date, pdfConfig}) {
       // Evidence / Error
       const evColor = r.ok ? [220,252,231] : [254,226,226];
       const evHead = r.ok ? "Evidence of Compromise" : "Failure Reason";
-      const evText = r.ok ? (r.evidence || r.message || "Shell session opened.") : (r.error || "Unknown error");
+      // EVIDENCE-INTEGRITY-V1: no canned "Shell session opened." as evidence.
+      const evText = r.ok ? (r.evidence || r.message || (VL_NO_EVIDENCE + " - module reported success but returned no output")) : (r.error || "Unknown error");
       fillR(margin, y, contentW, 5.5, evColor);
       txt(evHead, margin+3, y+4, 8, r.ok ? GREEN : RED, true);
       y += 6;
@@ -21289,7 +21251,17 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [target,    setTarget]    = useState("");
   const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
   const [authCookie,setAuthCookie]= useState("");   // optional: session cookie (webapp / auth_attacks)
+  // AUTH-SCOPE-V1: once auth has been used against a host, changing the
+  // target to a different host drops it — never reuse it on another target.
+  const _authHostRef = useRef("");
+  useEffect(() => {
+    const h = vlAuthHost(target);
+    if (_authHostRef.current && h !== _authHostRef.current) {
+      setAuthCookie(""); setAuthBearer(""); _authHostRef.current = "";
+    }
+  }, [target]);
   const [showAuth,  setShowAuth]  = useState(false);
+  const [profileRun, setProfileRun] = useState(null);   // TARGET-PROFILE-UI-V1: {profile, error, notes[]} for the last run
   // Advanced inputs (per-module — see MODULE_ADVANCED_INPUTS).
   // Persist between sessions so a Dockerfile / kubeconfig pasted once
   // survives reloads of the dashboard. kubeconfig is the sensitive one;
@@ -21546,7 +21518,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           || "container-scan";
       }
       const runBody = {target: _resolvedTarget || "n/a", concurrency: 16};
-      _applyScanConsent(runBody);  // SCAN-AUTHZ-V1
+      _applyScanConsent(runBody);  // SCAN-AUTHZ-V1 (+ profile_id / auth_role when an engagement profile is selected)
+      setProfileRun(runBody.profile_id ? {profile: {profile_id: runBody.profile_id, profile_name: (vlGetActiveProfile() || {}).name}, error: null, notes: []} : null);
+      if (authBearer.trim() || authCookie.trim()) _authHostRef.current = vlAuthHost(target);   // AUTH-SCOPE-V1
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
       // VL-TIER: pass tiers:[ids] when user has scoped scan to subset.
@@ -21591,7 +21565,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       // leaving every tile stuck on "queued" forever.
       if (!r.ok) {
         let errText = "";
-        try { errText = (await r.text()).slice(0, 200); } catch (_) {}
+        try { errText = (await r.text()).slice(0, 400); } catch (_) {}
+        try { const _j = JSON.parse(errText); if (_j && _j.detail) errText = String(_j.detail); } catch (_) {}
         if (r.status === 401) { try { _onAuthExpired && _onAuthExpired(); } catch (_) {} }
         const _startErr = new Error(`HTTP ${r.status} starting scan: ${errText || r.statusText || "no body"}`);
         _startErr.httpStatus = r.status;
@@ -21619,7 +21594,27 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             // also accepted for any older orchestrator instances still alive.)
             const kind = ev.event || ev.type;
             const payload = ev.result || ev.data || {};
+            // TARGET-PROFILE-UI-V1: engagement info, fail-closed AUTH_FAILED,
+            // and per-tool scope enforcement notes.
+            if (kind === "scan_started" && ev.profile) {
+              setProfileRun({profile: ev.profile, error: null, notes: []});
+            } else if (kind === "scan_error" || (ev.status === "AUTH_FAILED" && kind !== "tool_complete")) {
+              const _em = ev.error || "authentication failed";
+              setProfileRun(p => ({...(p || {}), error: _em, notes: (p && p.notes) || []}));
+              setResults(p => {
+                const next = {...p};
+                for (const k of Object.keys(next)) {
+                  if (next[k] && next[k].status === "queued") next[k] = {...next[k], status: "auth_failed",
+                    message: "Not run (AUTH_FAILED): " + _em};
+                }
+                return next;
+              });
+            }
             if ((kind === "tool_complete" || kind === "result") && ev.tool) {
+              const _sn = vlScopeNote(payload);
+              if (_sn && (payload.scope_enforcement || payload.coverage_note || payload.skip_category)) {
+                setProfileRun(p => p ? {...p, notes: [...(p.notes || []), {tool: ev.tool, note: _sn}].slice(-50)} : p);
+              }
               const failed = payload._failed || payload.error;
               if (failed) {
                 done++;
@@ -21679,12 +21674,18 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       // it means the operator hasn't confirmed authorization for this target.
       // Surface it clearly instead of painting every tool red "ERROR".
       const _blocked = e?.httpStatus === 403 || /authorization required/i.test(_msg);
-      const _blockedMsg = "Authorization required — tick the “I own this target” box above, then run again. (Practice labs are exempt.)";
+      // TARGET-PROFILE-UI-V1: a profile scan refused for scope / time window /
+      // destructive policy / login gets the server's reason, not the consent hint.
+      const _profileRefusal = _blocked && /out of scope|profile|testing window|destructive|Authentication for role/i.test(_msg);
+      const _blockedMsg = _profileRefusal
+        ? _msg.replace(/^HTTP 403 starting scan:\s*/, "")
+        : "Authorization required — tick the “I own this target” box above, then run again. (Practice labs are exempt.)";
+      if (_profileRefusal) setProfileRun(p => ({...(p || {}), error: _blockedMsg, notes: (p && p.notes) || []}));
       setResults(p => {
         const next = {...p};
         for (const k of Object.keys(next)) {
           if (next[k] && next[k].status === "queued") next[k] = {...next[k],
-            status: _blocked ? "blocked" : "error",
+            status: _profileRefusal ? (/out of scope/i.test(_msg) ? "out_of_scope" : "auth_failed") : _blocked ? "blocked" : "error",
             message: _blocked ? _blockedMsg : _msg};
         }
         return next;
@@ -21822,6 +21823,20 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           </div>
         )}
         <ScanAuthConsent />
+        {profileRun && (
+          <div style={{margin:"0 0 10px",padding:"8px 11px",background:profileRun.error?"#1c0a0a":"#0b1324",border:"1px solid "+(profileRun.error?"#7f1d1d":"#1e3a8a"),borderRadius:6,fontSize:11,lineHeight:1.5,color:"#cbd5e1"}}>
+            <div><b style={{color:"#93c5fd"}}>Engagement:</b> {(profileRun.profile||{}).profile_name || (profileRun.profile||{}).profile_id}
+              {profileRun.profile && profileRun.profile.max_rps ? ` — max ${profileRun.profile.max_rps} req/s, concurrency ${profileRun.profile.max_concurrency}${profileRun.profile.destructive_allowed ? "" : ", destructive tests OFF"}` : ""}
+              {profileRun.profile && profileRun.profile.auth ? (profileRun.profile.auth.authenticated ? `, logged in as role ${profileRun.profile.auth.role || "default"}` : ", unauthenticated") : ""}</div>
+            {profileRun.error && <div style={{color:"#fca5a5",fontWeight:600}}>{/^Target .*out of scope/i.test(profileRun.error) ? "OUT OF SCOPE" : "AUTH_FAILED / REFUSED"}: {profileRun.error} — nothing was scanned; results are marked not-run, never clean.</div>}
+            {(profileRun.notes||[]).length > 0 && (
+              <details style={{marginTop:4}}>
+                <summary style={{cursor:"pointer",color:"#fbbf24"}}>{profileRun.notes.length} scanner(s) affected by scope/safety enforcement (partial coverage)</summary>
+                {profileRun.notes.map((n,i) => <div key={i} style={{fontFamily:"JetBrains Mono,monospace",fontSize:10,color:"#94a3b8"}}>{n.tool}: {n.note}</div>)}
+              </details>
+            )}
+          </div>
+        )}
         <button
           onClick={runAll} disabled={!canRun}
           title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
@@ -22335,9 +22350,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         const prettyName = (slug) => slug
           .replace(/_advisory$/,"").replace(/_probe$/,"").replace(/_audit$/,"")
           .replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
+        const _isSkip = (r) => r && r.status === "done" && r.data && (r.data._skipped || String(r.data.status || "").toUpperCase() === "SKIPPED");
         const statusLabel = (r) => {
           if (!r || !r.status || r.status === "queued") return "QUEUED";
           if (r.status === "blocked") return "AUTH NEEDED";
+          if (r.status === "auth_failed") return "AUTH FAILED";
+          if (r.status === "out_of_scope") return "OUT OF SCOPE";
+          if (_isSkip(r)) return "SKIPPED";
           if (r.status === "error") return "ERROR";
           if (r.severity && r.severity !== "INFO" && r.severity !== "POSITIVE") return r.severity;
           if (r.severity === "POSITIVE") return "PASS";
@@ -22346,6 +22365,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         const statusColor = (r) => {
           if (!r || !r.status || r.status === "queued") return "#64748b";
           if (r.status === "blocked") return "#f59e0b";  // amber — not an error
+          if (r.status === "auth_failed" || r.status === "out_of_scope") return "#f59e0b";
+          if (_isSkip(r)) return "#94a3b8";
           if (r.status === "error") return "#ef4444";
           if (r.severity === "POSITIVE") return "#22c55e";
           return sevColor(r.severity);
@@ -22385,6 +22406,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 return (
                   <div key={tool}>
                     <div onClick={() => hasData && setExpanded(isExp ? null : tool)}
+                         title={r.message || vlScopeNote(r.data) || undefined}
                          style={{display:"flex", alignItems:"center", gap:14,
                                   padding:"11px 14px", background:"#0f172a",
                                   borderTop: ti === 0 ? "1px solid #1e293b" : "1px solid #1e293b",
@@ -22457,7 +22479,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                               <div style={{color:"#94a3b8", fontSize:11, marginBottom:6,
                                             fontFamily:"monospace", background:"#0f172a",
                                             padding:"6px 10px", borderRadius:3, wordBreak:"break-word"}}>
-                                {f.evidence_marker}
+                                {vlEvidenceOrNone(f)}
                               </div>
                             )}
                             {f.remediation && (
@@ -22770,14 +22792,10 @@ function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",    
 // ═══════════════════════════════════════════════════════════════
 function SettingsModule() {
   const [apiUrl,     setApiUrl]     = useState(getApiUrl());
-  const [shodanKey,  setShodanKey]  = useState(localStorage.getItem("shodanApiKey")   || "");
-  const [vtKey,      setVtKey]      = useState(localStorage.getItem("vtApiKey")        || "");
   const [saved, setSaved] = useState(false);
 
   const save = () => {
     localStorage.setItem("cyberApiUrl",  apiUrl.trim());
-    localStorage.setItem("shodanApiKey", shodanKey.trim());
-    localStorage.setItem("vtApiKey",     vtKey.trim());
     setSaved(true);
     setTimeout(() => { setSaved(false); window.location.reload(); }, 1200);
   };
@@ -22815,18 +22833,6 @@ function SettingsModule() {
         </div>
 
         {/* API Keys */}
-        <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Shodan API Key <span style={{color:"#475569",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
-          <input value={shodanKey} onChange={e=>setShodanKey(e.target.value)}
-            placeholder="Paste your Shodan API key — get free key at shodan.io"
-            style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-        <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>VirusTotal API Key <span style={{color:"#475569",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
-          <input value={vtKey} onChange={e=>setVtKey(e.target.value)}
-            placeholder="Paste your VirusTotal API key — get free key at virustotal.com"
-            style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-        </div>
 
         <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:8,padding:16,marginBottom:16}}>
           <div style={{fontSize:12,fontWeight:600,color:"#94a3b8",marginBottom:10}}>Current Connection</div>
@@ -24166,8 +24172,634 @@ function CredentialFormModal({ types, token, editing, styles, onClose, onSaved }
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+// TARGET-PROFILE-UI-V1 — Engagements / Target Profiles (CUSTOMER mode intake)
+// List + 6-step wizard over /api/profiles. Secrets are write-only: the API
+// returns "********" + has_<field>; sending "********" back keeps the stored
+// value, "" clears it. Test login / Check scope run against the SAVED profile.
+// ═══════════════════════════════════════════════════════════════
+const _VL_PROFILE_MASK = "********";
+const _VL_ROLE_FIELDS = {
+  login_url:      {label:"Login URL", ph:"https://app.example.com/login"},
+  username:       {label:"Username"},
+  password:       {label:"Password", secret:true},
+  username_field: {label:"Username form field", ph:"auto-detect (username / email)"},
+  password_field: {label:"Password form field", ph:"auto-detect"},
+  extra_fields:   {label:"Extra form fields", kv:"=", ph:"one per line: name=value"},
+  success_text:   {label:"Success text (shown only when logged in)", ph:"e.g. Logout"},
+  token:          {label:"Bearer token", secret:true, area:true},
+  header_name:    {label:"Header name", ph:"X-API-Key"},
+  api_key:        {label:"API key", secret:true},
+  cookie:         {label:"Cookie header value", secret:true, area:true, ph:"session=...; csrftoken=..."},
+  token_url:      {label:"Token URL", ph:"https://auth.example.com/oauth/token"},
+  client_id:      {label:"Client ID"},
+  client_secret:  {label:"Client secret", secret:true},
+  oauth_scope:    {label:"OAuth scope", ph:"api.read"},
+  audience:       {label:"Audience"},
+  extra_headers:  {label:"Extra headers", kv:":", ph:"one per line: Header-Name: value"},
+  session_ttl_sec:{label:"Session TTL (seconds)", num:true, ph:"1800"},
+  logged_in_indicator: {label:"Logged-in indicator (session health check)", group:true},
+};
+const _VL_PROVIDER_LABELS = {
+  form_login: "Form login (username + password)", bearer_token: "Static bearer token",
+  api_key_header: "API key header", cookie: "Session cookie", basic_auth: "HTTP Basic auth",
+  oauth2_client_credentials: "OAuth2 client credentials",
+};
+const _VL_DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
+const _vlLines = t => String(t || "").split("\n").map(x => x.trim()).filter(Boolean);
+const _vlKvToText = (o, sep) => Object.entries(o || {}).map(([k, v]) => k + (sep === ":" ? ": " : sep) + v).join("\n");
+const _vlTextToKv = (t, sep) => {
+  const o = {};
+  String(t || "").split("\n").forEach(l => {
+    const i = l.indexOf(sep);
+    if (i > 0) { const k = l.slice(0, i).trim(); if (k) o[k] = l.slice(i + sep.length).trim(); }
+  });
+  return o;
+};
+function _vlBlankRole(provider) {
+  const r = {role: "", provider: provider || "form_login", _test: null};
+  Object.keys(_VL_ROLE_FIELDS).forEach(f => { r[f] = ""; });
+  r.extra_fields = ""; r.extra_headers = "";
+  r.ind_url = ""; r.ind_regex = ""; r.ind_negative_regex = ""; r.ind_interval = "";
+  return r;
+}
+function _vlBlankDraft(meta) {
+  const ds = (meta && meta.default_safety) || {};
+  return {
+    id: null, name: "", targets_text: "", in_text: "", out_text: "", roles: [], default_role: "",
+    openapi_url: "", openapi_meta: null, spec_text: "", spec_fetch_url: "", tech_stack_notes: "",
+    max_rps: String(ds.max_rps != null ? ds.max_rps : 10), max_concurrency: String(ds.max_concurrency != null ? ds.max_concurrency : 8),
+    tw_enabled: false, tw: {timezone: "UTC", days: ["mon","tue","wed","thu","fri"], start: "09:00", end: "18:00"},
+    destructive_allowed: !!ds.destructive_allowed, allow_third_party_intel: ds.allow_third_party_intel !== false,
+    extra_hosts_text: "",
+    auth: {signer_name: "", signer_company: "", signer_email: "", signed_date: new Date().toISOString().slice(0, 10),
+           valid_until: "", scope_statement: "", ack: false},
+    company_name: "", logo_path: "", logoFile: null, logoPreview: null,
+  };
+}
+function _vlDraftFromProfile(p, meta) {
+  const d = _vlBlankDraft(meta);
+  const sf = (meta && meta.secret_fields) || ["password","token","api_key","cookie","client_secret"];
+  const s = p.safety || {};
+  Object.assign(d, {
+    id: p.id, name: p.name || "",
+    targets_text: (p.primary_targets || []).join("\n"), in_text: (p.in_scope || []).join("\n"),
+    out_text: (p.out_of_scope || []).join("\n"), default_role: p.default_role || "",
+    openapi_url: (p.openapi || {}).source_url || "", openapi_meta: p.openapi || null,
+    tech_stack_notes: p.tech_stack_notes || "",
+    max_rps: String(s.max_rps != null ? s.max_rps : d.max_rps),
+    max_concurrency: String(s.max_concurrency != null ? s.max_concurrency : d.max_concurrency),
+    tw_enabled: !!s.time_window, tw: s.time_window ? {...s.time_window} : d.tw,
+    destructive_allowed: !!s.destructive_allowed, allow_third_party_intel: s.allow_third_party_intel !== false,
+    extra_hosts_text: (s.extra_allowed_hosts || []).join("\n"),
+    auth: {...d.auth, ...(p.authorization || {})},
+    company_name: (p.reporting || {}).company_name || "", logo_path: (p.reporting || {}).logo_path || "",
+  });
+  d.roles = (p.auth_configs || []).map(r => {
+    const x = _vlBlankRole(r.provider);
+    Object.keys(_VL_ROLE_FIELDS).forEach(f => {
+      if (sf.includes(f)) x[f] = r["has_" + f] ? _VL_PROFILE_MASK : "";
+      else if (f === "extra_fields") x[f] = _vlKvToText(r.extra_fields, "=");
+      else if (f === "extra_headers") x[f] = _vlKvToText(r.extra_headers, ":");
+      else if (f === "logged_in_indicator") { /* below */ }
+      else x[f] = r[f] == null ? "" : String(r[f]);
+    });
+    x.role = r.role || "";
+    const ind = r.logged_in_indicator || {};
+    x.ind_url = ind.url || ""; x.ind_regex = ind.regex || ""; x.ind_negative_regex = ind.negative_regex || "";
+    x.ind_interval = ind.check_interval_sec ? String(ind.check_interval_sec) : "";
+    return x;
+  });
+  return d;
+}
+function _vlProviderFields(meta, provider) {
+  const p = ((meta && meta.providers) || {})[provider] || {required: [], optional: []};
+  return {required: p.required || [], optional: p.optional || [], all: [...(p.required || []), ...(p.optional || [])]};
+}
+function _vlDraftToPayload(d, meta) {
+  const sf = (meta && meta.secret_fields) || ["password","token","api_key","cookie","client_secret"];
+  const roles = d.roles.map(r => {
+    const pf = _vlProviderFields(meta, r.provider).all;
+    const o = {role: r.role.trim(), provider: r.provider};
+    pf.forEach(f => {
+      if (f === "extra_fields") o.extra_fields = _vlTextToKv(r.extra_fields, "=");
+      else if (f === "extra_headers") o.extra_headers = _vlTextToKv(r.extra_headers, ":");
+      else if (f === "session_ttl_sec") { if (String(r.session_ttl_sec).trim()) o.session_ttl_sec = Number(r.session_ttl_sec); }
+      else if (f === "logged_in_indicator") {
+        if (r.ind_url.trim() || r.ind_regex.trim() || r.ind_negative_regex.trim()) {
+          o.logged_in_indicator = {url: r.ind_url.trim(), regex: r.ind_regex.trim(),
+            negative_regex: r.ind_negative_regex.trim(),
+            check_interval_sec: r.ind_interval ? Number(r.ind_interval) : 300};
+        }
+      }
+      else o[f] = sf.includes(f) ? r[f] : String(r[f] || "").trim();
+    });
+    // Secrets that do not belong to this provider are cleared (""), so a
+    // role switched e.g. form_login -> bearer_token drops the old password.
+    sf.forEach(f => { if (!pf.includes(f)) o[f] = ""; });
+    return o;
+  });
+  return {
+    name: d.name.trim(),
+    primary_targets: _vlLines(d.targets_text), in_scope: _vlLines(d.in_text), out_of_scope: _vlLines(d.out_text),
+    auth_configs: roles, default_role: d.default_role,
+    openapi: {source_url: d.openapi_url.trim()},
+    tech_stack_notes: d.tech_stack_notes,
+    safety: {
+      max_rps: Number(d.max_rps), max_concurrency: Number(d.max_concurrency),
+      time_window: d.tw_enabled ? d.tw : null,
+      destructive_allowed: !!d.destructive_allowed, allow_third_party_intel: !!d.allow_third_party_intel,
+      extra_allowed_hosts: _vlLines(d.extra_hosts_text),
+    },
+    authorization: {...d.auth, ack: !!d.auth.ack},
+    reporting: {company_name: d.company_name.trim()},
+  };
+}
+
+function TargetProfilesModule({token}) {
+  const [meta, setMeta] = useState(null);
+  const [profiles, setProfiles] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [draft, setDraft] = useState(null);    // null = list view
+  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [scopeUrls, setScopeUrls] = useState("");
+  const [scopeRes, setScopeRes] = useState(null);
+  const [active, setActive] = useState(() => vlGetActiveProfile());
+  const STEPS = ["Scope", "Authentication", "API spec", "Safety", "Authorization", "Reporting"];
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [m, l] = await Promise.all([
+        meta ? Promise.resolve(meta) : api("/api/profiles/meta", "GET", null, token),
+        api("/api/profiles?limit=200", "GET", null, token),
+      ]);
+      setMeta(m); setProfiles((l && l.profiles) || []);
+    } catch (e) { setMsg({type: "error", text: e.message}); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => {
+    load();
+    const onSel = (e) => setActive(e.detail || null);
+    window.addEventListener("vl:profileChanged", onSel);
+    return () => window.removeEventListener("vl:profileChanged", onSel);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const upd = (patch) => { setDraft(d => ({...d, ...patch})); setDirty(true); };
+  const updAuth = (patch) => { setDraft(d => ({...d, auth: {...d.auth, ...patch}})); setDirty(true); };
+  const updRole = (i, patch) => { setDraft(d => ({...d, roles: d.roles.map((r, j) => j === i ? {...r, ...patch} : r)})); setDirty(true); };
+  const errText = (e) => String((e && e.message) || e).replace(/^HTTP \d+ on [^:]+:\s*/, "");
+
+  const startNew = () => { setDraft(_vlBlankDraft(meta)); setStep(0); setDirty(false); setScopeRes(null); setMsg(null); };
+  const startEdit = (p) => { setDraft(_vlDraftFromProfile(p, meta)); setStep(0); setDirty(false); setScopeRes(null); setMsg(null);
+    if ((p.reporting || {}).logo_path) vlLoadProfileLogo(p.id, true).then(v => v && setDraft(d => d && d.id === p.id ? {...d, logoPreview: v.dataUrl} : d)); };
+  const close = () => {
+    if (dirty && !window.confirm("Discard unsaved changes?")) return;
+    setDraft(null); setDirty(false);
+  };
+  const activateForScans = (p) => { vlSetActiveProfile(vlProfileSnapshot(p)); if ((p.reporting || {}).logo_path) vlLoadProfileLogo(p.id, true);
+    setMsg({type: "success", text: `"${p.name}" is now the active engagement for scans (selector in every scan panel).`}); };
+  const del = async (p) => {
+    if (!window.confirm(`Delete engagement profile "${p.name}"? Stored credentials are destroyed.`)) return;
+    try {
+      await api("/api/profiles/" + encodeURIComponent(p.id), "DELETE", null, token);
+      if (active && active.id === p.id) vlSetActiveProfile(null);
+      vlProfilesChanged(); await load();
+      setMsg({type: "success", text: "Profile deleted."});
+    } catch (e) { setMsg({type: "error", text: errText(e)}); }
+  };
+
+  const save = async () => {
+    const d = draft;
+    const missing = [];
+    if (!d.name.trim()) missing.push("name (Scope)");
+    if (_vlLines(d.targets_text).length === 0) missing.push("at least one primary target (Scope)");
+    d.roles.forEach((r, i) => { if (!r.role.trim()) missing.push(`role name for role #${i + 1} (Authentication)`); });
+    ["signer_name", "signer_company", "signed_date", "scope_statement"].forEach(k => { if (!String(d.auth[k] || "").trim()) missing.push(k.replace(/_/g, " ") + " (Authorization)"); });
+    if (!d.auth.ack) missing.push("the authorization acknowledgment (Authorization)");
+    if (missing.length) { setMsg({type: "error", text: "Required: " + missing.join(", ")}); return; }
+    setSaving(true); setMsg(null);
+    const notes = [];
+    try {
+      const body = _vlDraftToPayload(d, meta);
+      const saved = d.id
+        ? await api("/api/profiles/" + encodeURIComponent(d.id), "PUT", body, token)
+        : await api("/api/profiles", "POST", body, token);
+      const pid = saved.id;
+      if (d.spec_text.trim() || d.spec_fetch_url.trim()) {
+        try {
+          const r = await api("/api/profiles/" + encodeURIComponent(pid) + "/openapi", "PUT",
+            d.spec_text.trim() ? {spec_text: d.spec_text} : {spec_url: d.spec_fetch_url.trim()}, token);
+          notes.push(`OpenAPI spec stored (${(r.openapi || {}).path_count || 0} paths).`);
+        } catch (e) { notes.push("OpenAPI spec NOT stored: " + errText(e)); }
+      }
+      if (d.logoFile) {
+        try {
+          const fd = new FormData(); fd.append("file", d.logoFile);
+          const r = await fetch(API + "/api/profiles/" + encodeURIComponent(pid) + "/logo", {method: "POST", body: fd, credentials: "include"});
+          if (!r.ok) { let t = ""; try { t = (await r.json()).detail; } catch (_) {} throw new Error(t || ("HTTP " + r.status)); }
+          vlLoadProfileLogo(pid, true);
+          notes.push("Logo uploaded.");
+        } catch (e) { notes.push("Logo NOT uploaded: " + errText(e)); }
+      }
+      const fresh = await api("/api/profiles/" + encodeURIComponent(pid), "GET", null, token);
+      const nd = _vlDraftFromProfile(fresh, meta);
+      nd.logoPreview = d.logoPreview;
+      setDraft(nd); setDirty(false);
+      if (active && active.id === pid) vlSetActiveProfile(vlProfileSnapshot(fresh, active.role));
+      vlProfilesChanged(); load();
+      const st = fresh.authorization_status || {};
+      setMsg({type: notes.some(n => /NOT/.test(n)) ? "error" : "success",
+        text: `Saved "${fresh.name}". Authorization: ${st.ok ? "valid — " + st.reason : "NOT valid — " + st.reason}. ${notes.join(" ")}`});
+    } catch (e) { setMsg({type: "error", text: errText(e)}); }
+    finally { setSaving(false); }
+  };
+
+  const testLogin = async (i) => {
+    const r = draft.roles[i];
+    if (!draft.id) { updRole(i, {_test: {ok: false, error: "Save the profile first — Test login runs against the saved credentials."}}); return; }
+    updRole(i, {_test: {running: true}});
+    try {
+      const res = await api("/api/profiles/" + encodeURIComponent(draft.id) + "/test_auth", "POST", {role: r.role.trim() || undefined, force: true}, token);
+      setDraft(d => ({...d, roles: d.roles.map((x, j) => j === i ? {...x, _test: res} : x)}));
+    } catch (e) {
+      setDraft(d => ({...d, roles: d.roles.map((x, j) => j === i ? {...x, _test: {ok: false, error: errText(e)}} : x)}));
+    }
+  };
+  const checkScope = async () => {
+    if (!draft.id) { setScopeRes({error: "Save the profile first — the scope tester uses the saved rules."}); return; }
+    const urls = _vlLines(scopeUrls).slice(0, 100);
+    if (!urls.length) return;
+    setScopeRes({running: true});
+    try { setScopeRes(await api("/api/profiles/" + encodeURIComponent(draft.id) + "/check_scope", "POST", {urls}, token)); }
+    catch (e) { setScopeRes({error: errText(e)}); }
+  };
+
+  // ── styles (match the other modules) ──
+  const card = {background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 16, marginBottom: 14};
+  const lbl = {display: "block", color: "#94a3b8", fontSize: 11, letterSpacing: .5, marginBottom: 4, marginTop: 10, fontWeight: 600};
+  const inp = {width: "100%", background: "#020617", border: "1px solid #334155", borderRadius: 6, padding: "8px 10px", color: "#e2e8f0", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit"};
+  const mono = {...inp, fontFamily: "JetBrains Mono,monospace", fontSize: 12};
+  const btn = (bg) => ({padding: "8px 14px", background: bg || "#1e293b", color: "#fff", border: bg ? "none" : "1px solid #334155", borderRadius: 7, fontWeight: 600, cursor: "pointer", fontSize: 13});
+  const hint = {color: "#64748b", fontSize: 11, marginTop: 3, lineHeight: 1.5};
+  const pill = (ok) => ({display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700, letterSpacing: .5,
+    background: ok ? "#052e16" : "#2d1000", color: ok ? "#4ade80" : "#fb923c", border: "1px solid " + (ok ? "#166534" : "#9a3412")});
+
+  const Msg = () => msg ? (
+    <div style={{padding: "10px 16px", borderRadius: 8, marginBottom: 14, background: msg.type === "error" ? "#7f1d1d" : "#14532d", color: "#fff", fontSize: 13, lineHeight: 1.5}}>{msg.text}</div>
+  ) : null;
+
+  // ── LIST VIEW ──
+  if (!draft) {
+    return (
+      <div style={{padding: "24px 32px", color: "#e2e8f0", minHeight: "100vh", overflow: "auto"}}>
+        <div style={{maxWidth: 1200, margin: "0 auto"}}>
+          <h1 style={{fontSize: 26, fontWeight: 700, marginBottom: 6}}>Engagements / Target Profiles</h1>
+          <p style={{color: "#94a3b8", marginBottom: 20, fontSize: 14, lineHeight: 1.6}}>
+            One profile per customer engagement: scope, login roles, API spec, safety limits, the client's signed
+            authorization and report branding. Pick a profile in any scan panel and the backend enforces scope
+            and rate limits on every request, logs in per role, and uses the signed authorization as consent.
+          </p>
+          <div style={{display: "flex", gap: 12, marginBottom: 18}}>
+            <button onClick={startNew} disabled={!meta} style={btn("#3b82f6")}>+ New engagement profile</button>
+            <button onClick={load} disabled={loading} style={btn()}>{loading ? "Loading…" : "↻ Refresh"}</button>
+            {active && <button onClick={() => vlSetActiveProfile(null)} style={btn()}>Clear active profile</button>}
+          </div>
+          <Msg/>
+          {active && (
+            <div style={{...card, borderColor: "#1e40af", background: "#0b1324", fontSize: 13}}>
+              <b style={{color: "#93c5fd"}}>Active for scans:</b> {active.name}
+              {active.role ? ` — role ${active.role === VL_UNAUTH_ROLE ? "unauthenticated" : active.role}` : ""}
+              {" "}<span style={pill(active.auth_ok)}>{active.auth_ok ? "AUTHORIZED" : "NO VALID AUTHORIZATION"}</span>
+            </div>
+          )}
+          <div style={{background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, overflow: "hidden"}}>
+            {profiles.length === 0 ? (
+              <div style={{padding: 32, color: "#94a3b8", textAlign: "center", fontSize: 14}}>
+                {loading ? "Loading…" : "No engagement profiles yet. Create one to scan a customer system in scope-enforced CUSTOMER mode."}
+              </div>
+            ) : (
+              <table style={{width: "100%", borderCollapse: "collapse"}}>
+                <thead>
+                  <tr style={{background: "#1e293b"}}>
+                    {["PROFILE", "PRIMARY TARGETS", "ROLES", "AUTHORIZATION", "UPDATED", "ACTIONS"].map((h, i) =>
+                      <th key={h} style={{padding: "10px 14px", textAlign: i === 5 ? "right" : "left", fontSize: 11, color: "#94a3b8", letterSpacing: 1}}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {profiles.map(p => {
+                    const st = p.authorization_status || {};
+                    const isAct = active && active.id === p.id;
+                    return (
+                      <tr key={p.id} style={{borderTop: "1px solid #1e293b", background: isAct ? "#0b1324" : "transparent"}}>
+                        <td style={{padding: "10px 14px", fontSize: 13}}>
+                          <div style={{fontWeight: 600}}>{p.name}{isAct && <span style={{...pill(true), marginLeft: 8}}>ACTIVE</span>}</div>
+                          <div style={{color: "#64748b", fontSize: 11}}>{(p.reporting || {}).company_name || ""}</div>
+                        </td>
+                        <td style={{padding: "10px 14px", fontSize: 12, color: "#cbd5e1", fontFamily: "JetBrains Mono,monospace"}}>
+                          {(p.primary_targets || []).slice(0, 3).join(", ")}{(p.primary_targets || []).length > 3 ? ` +${p.primary_targets.length - 3}` : ""}
+                        </td>
+                        <td style={{padding: "10px 14px", fontSize: 12, color: "#cbd5e1"}}>
+                          {(p.auth_configs || []).length ? (p.auth_configs || []).map(r => r.role).join(", ") : <span style={{color: "#64748b"}}>none (unauthenticated)</span>}
+                        </td>
+                        <td style={{padding: "10px 14px", fontSize: 12}} title={st.reason || ""}>
+                          <span style={pill(st.ok)}>{st.ok ? "SIGNED" : "MISSING / INVALID"}</span>
+                          <div style={{color: "#64748b", fontSize: 10, marginTop: 3, maxWidth: 260}}>{st.reason}</div>
+                        </td>
+                        <td style={{padding: "10px 14px", fontSize: 11, color: "#94a3b8"}}>{String(p.updated_at || "").replace("T", " ").slice(0, 16)}</td>
+                        <td style={{padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap"}}>
+                          <button onClick={() => activateForScans(p)} style={{...btn(isAct ? undefined : "#166534"), padding: "6px 10px", fontSize: 12, marginRight: 6}}>{isAct ? "Active" : "Use for scans"}</button>
+                          <button onClick={() => startEdit(p)} style={{...btn(), padding: "6px 10px", fontSize: 12, marginRight: 6}}>Edit</button>
+                          <button onClick={() => del(p)} style={{...btn("#7f1d1d"), padding: "6px 10px", fontSize: 12}}>Delete</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── WIZARD ──
+  const d = draft;
+  const sfields = (meta && meta.secret_fields) || [];
+  const syntax = (meta && meta.scope_pattern_syntax) || {};
+  const renderRoleField = (r, i, f, required) => {
+    const def = _VL_ROLE_FIELDS[f] || {label: f};
+    const secret = def.secret || sfields.includes(f);
+    const label = def.label + (required ? " *" : "");
+    if (def.group) {
+      return (
+        <div key={f} style={{gridColumn: "1 / -1", border: "1px dashed #334155", borderRadius: 8, padding: "4px 10px 10px", marginTop: 10}}>
+          <span style={lbl}>{label}</span>
+          <div style={{display: "grid", gridTemplateColumns: "2fr 1fr 1fr 110px", gap: 8}}>
+            <input style={mono} placeholder="URL to poll, e.g. https://app.example.com/account" value={r.ind_url} onChange={e => updRole(i, {ind_url: e.target.value})}/>
+            <input style={mono} placeholder="regex when logged in" value={r.ind_regex} onChange={e => updRole(i, {ind_regex: e.target.value})}/>
+            <input style={mono} placeholder="regex when logged OUT" value={r.ind_negative_regex} onChange={e => updRole(i, {ind_negative_regex: e.target.value})}/>
+            <input style={mono} placeholder="every 300s" value={r.ind_interval} onChange={e => updRole(i, {ind_interval: e.target.value.replace(/[^0-9]/g, "")})}/>
+          </div>
+          <div style={hint}>The session manager re-checks this page and re-logs in centrally when the session expires mid-scan.</div>
+        </div>
+      );
+    }
+    const common = {style: def.kv || def.area ? {...mono, minHeight: 58} : (secret ? mono : inp), placeholder: def.ph || "",
+      value: r[f] || "", onChange: e => updRole(i, {[f]: def.num ? e.target.value.replace(/[^0-9]/g, "") : e.target.value})};
+    const wide = def.kv || def.area;
+    return (
+      <div key={f} style={wide ? {gridColumn: "1 / -1"} : null}>
+        <span style={lbl}>{label}{secret && r[f] === _VL_PROFILE_MASK ? <span style={{color: "#4ade80", marginLeft: 6}}>stored — leave to keep, clear to remove</span> : null}</span>
+        {wide ? <textarea {...common} autoComplete="off" spellCheck={false}/> :
+          <input {...common} type={secret && r[f] !== _VL_PROFILE_MASK ? "password" : "text"} autoComplete={secret ? "new-password" : "off"}
+                 onFocus={secret && r[f] === _VL_PROFILE_MASK ? (e => e.target.select()) : undefined}/>}
+      </div>
+    );
+  };
+
+  const stepBody = () => {
+    if (step === 0) return (
+      <div style={card}>
+        <span style={lbl}>Engagement name *</span>
+        <input style={inp} value={d.name} onChange={e => upd({name: e.target.value})} placeholder="Acme Corp — Q4 external web app test"/>
+        <span style={lbl}>Primary targets * <span style={{color: "#64748b", fontWeight: 400}}>(one per line — URL, host or CIDR; in scope host-wide)</span></span>
+        <textarea style={{...mono, minHeight: 70}} value={d.targets_text} onChange={e => upd({targets_text: e.target.value})} placeholder={"https://app.acme.com\nhttps://api.acme.com"}/>
+        <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
+          <div>
+            <span style={lbl}>Additional in-scope patterns</span>
+            <textarea style={{...mono, minHeight: 90}} value={d.in_text} onChange={e => upd({in_text: e.target.value})} placeholder={"*.acme.com\n203.0.113.0/24"}/>
+          </div>
+          <div>
+            <span style={lbl}>Out of scope <span style={{color: "#64748b", fontWeight: 400}}>(always wins)</span></span>
+            <textarea style={{...mono, minHeight: 90}} value={d.out_text} onChange={e => upd({out_text: e.target.value})} placeholder={"https://app.acme.com/billing\n*.prod.acme.com"}/>
+          </div>
+        </div>
+        <div style={hint}>
+          Pattern syntax — host glob: <code>{syntax.host_glob}</code> · URL prefix: <code>{syntax.url_prefix}</code> · CIDR/IP: <code>{syntax.cidr_or_ip}</code> · regex: <code>{syntax.regex}</code>. Rule: {syntax.rule}.
+        </div>
+        <span style={lbl}>Tech stack notes</span>
+        <textarea style={{...inp, minHeight: 50}} value={d.tech_stack_notes} onChange={e => upd({tech_stack_notes: e.target.value})} placeholder="e.g. React SPA + Django REST, Cloudflare WAF, staging mirrors prod"/>
+        <div style={{...card, background: "#020617", marginTop: 14, marginBottom: 0}}>
+          <b style={{fontSize: 13}}>Check scope</b>
+          <div style={hint}>Dry-run the SAVED scope rules against URLs (one per line). Save first after editing.</div>
+          <textarea style={{...mono, minHeight: 60, marginTop: 6}} value={scopeUrls} onChange={e => setScopeUrls(e.target.value)} placeholder={"https://app.acme.com/login\nhttps://cdn.thirdparty.net/x.js"}/>
+          <button onClick={checkScope} style={{...btn("#0e7490"), marginTop: 8}} disabled={scopeRes && scopeRes.running}>{scopeRes && scopeRes.running ? "Checking…" : "Check scope"}</button>
+          {scopeRes && scopeRes.error && <div style={{color: "#fca5a5", fontSize: 12, marginTop: 8}}>{scopeRes.error}</div>}
+          {scopeRes && scopeRes.results && (
+            <div style={{marginTop: 10}}>
+              <div style={{fontSize: 11, color: scopeRes.within_time_window ? "#4ade80" : "#fb923c", marginBottom: 6}}>
+                {scopeRes.within_time_window ? "Currently INSIDE the allowed testing window" : "Currently OUTSIDE the allowed testing window — scans would be refused"}
+              </div>
+              {scopeRes.results.map((x, k) => (
+                <div key={k} style={{display: "flex", gap: 10, fontSize: 12, padding: "4px 0", borderTop: "1px solid #1e293b", fontFamily: "JetBrains Mono,monospace"}}>
+                  <span style={{...pill(x.allowed), minWidth: 62, textAlign: "center"}}>{x.allowed ? "ALLOWED" : "BLOCKED"}</span>
+                  <span style={{flex: 1, wordBreak: "break-all"}}>{x.url}</span>
+                  <span style={{color: "#94a3b8"}}>{x.category}{x.reason ? " — " + x.reason : ""}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+    if (step === 1) return (
+      <div>
+        <div style={{...card, fontSize: 13, color: "#94a3b8"}}>
+          Add one role per account the scanners should test as (e.g. <b>admin</b>, <b>user</b>). No roles = unauthenticated engagement.
+          Secrets are encrypted at rest and never shown again.
+          <div style={{marginTop: 10, display: "flex", gap: 10, alignItems: "center"}}>
+            <span style={{color: "#cbd5e1"}}>Default role:</span>
+            <select style={{...inp, width: 220}} value={d.default_role} onChange={e => upd({default_role: e.target.value})}>
+              <option value="">(first role)</option>
+              {d.roles.filter(r => r.role.trim()).map(r => <option key={r.role} value={r.role.trim()}>{r.role}</option>)}
+            </select>
+            <button onClick={() => upd({roles: [...d.roles, _vlBlankRole("form_login")]})} style={btn("#3b82f6")}>+ Add role</button>
+          </div>
+        </div>
+        {d.roles.map((r, i) => {
+          const pf = _vlProviderFields(meta, r.provider);
+          const t = r._test;
+          return (
+            <div key={i} style={card}>
+              <div style={{display: "grid", gridTemplateColumns: "1fr 1.4fr auto auto", gap: 10, alignItems: "end"}}>
+                <div><span style={lbl}>Role name *</span><input style={inp} value={r.role} onChange={e => updRole(i, {role: e.target.value})} placeholder="admin"/></div>
+                <div><span style={lbl}>Provider *</span>
+                  <select style={inp} value={r.provider} onChange={e => updRole(i, {provider: e.target.value, _test: null})}>
+                    {Object.keys((meta && meta.providers) || _VL_PROVIDER_LABELS).map(k => <option key={k} value={k}>{_VL_PROVIDER_LABELS[k] || k}</option>)}
+                  </select></div>
+                <button onClick={() => testLogin(i)} style={btn("#166534")} disabled={t && t.running} title="Logs in with the SAVED credentials for this role">{t && t.running ? "Testing…" : "Test login"}</button>
+                <button onClick={() => upd({roles: d.roles.filter((_, j) => j !== i), default_role: d.default_role === r.role.trim() ? "" : d.default_role})} style={btn("#7f1d1d")}>Remove</button>
+              </div>
+              <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px"}}>
+                {pf.required.map(f => renderRoleField(r, i, f, true))}
+                {pf.optional.map(f => renderRoleField(r, i, f, false))}
+              </div>
+              {t && !t.running && (
+                <div style={{marginTop: 10, padding: "8px 10px", borderRadius: 6, fontSize: 12, lineHeight: 1.5,
+                             background: t.ok && (t.session || {}).authenticated ? "#052e16" : "#1c0a0a",
+                             border: "1px solid " + (t.ok && (t.session || {}).authenticated ? "#166534" : "#7f1d1d")}}>
+                  {t.ok
+                    ? (t.session && t.session.authenticated
+                        ? <>Login OK as <b>{t.session.role}</b> ({t.session.provider}) — {t.session.has_cookie ? "session cookie" : ""}{t.session.has_bearer ? " bearer token" : ""}{(t.session.header_names || []).length ? " headers: " + t.session.header_names.join(", ") : ""}; verified: {String(t.session.verified)}; expires in {t.session.expires_in_sec}s{t.session.detail ? " — " + t.session.detail : ""}</>
+                        : <>No session established{t.detail ? " — " + t.detail : ""}.</>)
+                    : <span style={{color: "#fca5a5"}}>Login FAILED: {t.error}</span>}
+                  {t.scope_enforcement && t.scope_enforcement.blocked_total > 0 && (
+                    <div style={{color: "#fbbf24"}}>Scope guard blocked {t.scope_enforcement.blocked_total} request(s) during login: {(t.scope_enforcement.blocked_samples || []).map(x => x.url).join(", ")}</div>
+                  )}
+                  {dirty && <div style={{color: "#94a3b8"}}>Note: tested the saved version — you have unsaved edits.</div>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+    if (step === 2) return (
+      <div style={card}>
+        <span style={lbl}>OpenAPI / Swagger source URL <span style={{color: "#64748b", fontWeight: 400}}>(passed to API scanners as api_spec_url)</span></span>
+        <input style={mono} value={d.openapi_url} onChange={e => upd({openapi_url: e.target.value})} placeholder="https://api.acme.com/openapi.json"/>
+        {d.openapi_meta && d.openapi_meta.has_spec && (
+          <div style={{...hint, color: "#4ade80"}}>Stored spec: sha256 {String(d.openapi_meta.spec_sha256 || "").slice(0, 12)}… uploaded {d.openapi_meta.uploaded_at}</div>
+        )}
+        <span style={lbl}>Upload a spec now (stored server-side, ≤ 5 MB)</span>
+        <div style={{display: "flex", gap: 10, alignItems: "center", marginBottom: 6}}>
+          <input type="file" accept=".json,.yaml,.yml,application/json,text/yaml" onChange={e => {
+            const f = e.target.files && e.target.files[0]; if (!f) return;
+            if (f.size > 5 * 1024 * 1024) { setMsg({type: "error", text: "Spec file exceeds 5 MB"}); return; }
+            const fr = new FileReader(); fr.onload = () => upd({spec_text: String(fr.result || ""), spec_fetch_url: ""}); fr.readAsText(f);
+          }} style={{color: "#94a3b8", fontSize: 12}}/>
+          <span style={{color: "#64748b", fontSize: 12}}>or fetch from URL:</span>
+          <input style={{...mono, flex: 1}} value={d.spec_fetch_url} onChange={e => upd({spec_fetch_url: e.target.value, spec_text: ""})} placeholder="https://api.acme.com/v3/openapi.yaml"/>
+        </div>
+        <textarea style={{...mono, minHeight: 140}} value={d.spec_text} onChange={e => upd({spec_text: e.target.value, spec_fetch_url: ""})} placeholder="…or paste the OpenAPI JSON/YAML here"/>
+        <div style={hint}>The spec upload happens when you click Save.</div>
+      </div>
+    );
+    if (step === 3) return (
+      <div style={card}>
+        <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
+          <div><span style={lbl}>Max requests / second (0.1 – 1000)</span><input style={inp} value={d.max_rps} onChange={e => upd({max_rps: e.target.value.replace(/[^0-9.]/g, "")})}/></div>
+          <div><span style={lbl}>Max concurrency (1 – 32)</span><input style={inp} value={d.max_concurrency} onChange={e => upd({max_concurrency: e.target.value.replace(/[^0-9]/g, "")})}/></div>
+        </div>
+        <label style={{display: "flex", gap: 8, alignItems: "center", marginTop: 14, cursor: "pointer", color: d.destructive_allowed ? "#fca5a5" : "#cbd5e1", fontSize: 13}}>
+          <input type="checkbox" checked={d.destructive_allowed} onChange={e => upd({destructive_allowed: e.target.checked})}/>
+          Allow destructive / state-changing tests (race conditions, mass assignment, uploads, DoS-style probes). Off = those scanners report SKIPPED.
+        </label>
+        <label style={{display: "flex", gap: 8, alignItems: "center", marginTop: 8, cursor: "pointer", color: "#cbd5e1", fontSize: 13}}>
+          <input type="checkbox" checked={d.allow_third_party_intel} onChange={e => upd({allow_third_party_intel: e.target.checked})}/>
+          Allow passive third-party intel lookups (crt.sh, DNS/OSINT APIs) — never touches the target
+        </label>
+        <label style={{display: "flex", gap: 8, alignItems: "center", marginTop: 14, cursor: "pointer", color: "#cbd5e1", fontSize: 13}}>
+          <input type="checkbox" checked={d.tw_enabled} onChange={e => upd({tw_enabled: e.target.checked})}/>
+          Restrict testing to a time window
+        </label>
+        {d.tw_enabled && (
+          <div style={{display: "grid", gridTemplateColumns: "1.3fr 2fr 1fr 1fr", gap: 10, marginTop: 6, alignItems: "end"}}>
+            <div><span style={lbl}>Timezone (IANA)</span><input style={inp} value={d.tw.timezone} onChange={e => upd({tw: {...d.tw, timezone: e.target.value}})} placeholder="Europe/London"/></div>
+            <div><span style={lbl}>Days</span>
+              <div style={{display: "flex", gap: 4, flexWrap: "wrap"}}>
+                {((meta && meta.time_window_days) || _VL_DAYS).map(day => {
+                  const on = (d.tw.days || []).includes(day);
+                  return <button key={day} onClick={() => upd({tw: {...d.tw, days: on ? d.tw.days.filter(x => x !== day) : [...(d.tw.days || []), day]}})}
+                    style={{padding: "6px 8px", borderRadius: 5, fontSize: 11, cursor: "pointer", border: "1px solid " + (on ? "#1d4ed8" : "#334155"), background: on ? "#1e3a8a" : "#020617", color: on ? "#fff" : "#94a3b8"}}>{day}</button>;
+                })}
+              </div></div>
+            <div><span style={lbl}>Start (HH:MM)</span><input style={inp} value={d.tw.start} onChange={e => upd({tw: {...d.tw, start: e.target.value}})}/></div>
+            <div><span style={lbl}>End (HH:MM)</span><input style={inp} value={d.tw.end} onChange={e => upd({tw: {...d.tw, end: e.target.value}})}/></div>
+          </div>
+        )}
+        <span style={lbl}>Extra allowed hosts <span style={{color: "#64748b", fontWeight: 400}}>(e.g. the SSO / identity provider the login redirects through)</span></span>
+        <textarea style={{...mono, minHeight: 50}} value={d.extra_hosts_text} onChange={e => upd({extra_hosts_text: e.target.value})} placeholder="login.microsoftonline.com"/>
+      </div>
+    );
+    if (step === 4) return (
+      <div style={card}>
+        <div style={{fontSize: 13, color: "#94a3b8", lineHeight: 1.6, marginBottom: 6}}>
+          Record the customer's written authorization (contract / rules-of-engagement). A valid, in-date record covering the
+          target replaces the per-scan acknowledgment and is written to the audit log with every scan.
+        </div>
+        <div style={{display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12}}>
+          <div><span style={lbl}>Signer name *</span><input style={inp} value={d.auth.signer_name} onChange={e => updAuth({signer_name: e.target.value})}/></div>
+          <div><span style={lbl}>Signer company *</span><input style={inp} value={d.auth.signer_company} onChange={e => updAuth({signer_company: e.target.value})}/></div>
+          <div><span style={lbl}>Signer email</span><input style={inp} type="email" value={d.auth.signer_email} onChange={e => updAuth({signer_email: e.target.value})}/></div>
+          <div><span style={lbl}>Signed date *</span><input style={inp} type="date" value={d.auth.signed_date} onChange={e => updAuth({signed_date: e.target.value})}/></div>
+          <div><span style={lbl}>Valid until</span><input style={inp} type="date" value={d.auth.valid_until} onChange={e => updAuth({valid_until: e.target.value})}/></div>
+        </div>
+        <span style={lbl}>Scope statement * <span style={{color: "#64748b", fontWeight: 400}}>(as written in the signed authorization)</span></span>
+        <textarea style={{...inp, minHeight: 90}} value={d.auth.scope_statement} onChange={e => updAuth({scope_statement: e.target.value})}
+                  placeholder="Acme Corp authorizes VulnusLab to perform non-destructive security testing of app.acme.com and api.acme.com between …"/>
+        <label style={{display: "flex", gap: 10, alignItems: "flex-start", marginTop: 14, cursor: "pointer", fontSize: 13, lineHeight: 1.5,
+                       color: d.auth.ack ? "#86efac" : "#fdba74", background: d.auth.ack ? "#052e16" : "#1a1206", border: "1px solid " + (d.auth.ack ? "#166534" : "#7c2d12"), borderRadius: 8, padding: "10px 12px"}}>
+          <input type="checkbox" checked={!!d.auth.ack} onChange={e => updAuth({ack: e.target.checked})} style={{marginTop: 3}}/>
+          <span><b>I confirm</b> I hold a written authorization signed by the person above, on behalf of the company above, permitting
+          the testing described in the scope statement, and that it is in force for the dates given. I understand testing without
+          authorization is illegal. (Required to save.)</span>
+        </label>
+      </div>
+    );
+    return (
+      <div style={card}>
+        <span style={lbl}>Report company name <span style={{color: "#64748b", fontWeight: 400}}>(shown as "Prepared for" on PDF covers and page headers)</span></span>
+        <input style={inp} value={d.company_name} onChange={e => upd({company_name: e.target.value})} placeholder="Acme Corp"/>
+        <span style={lbl}>Report logo (PNG or JPEG, ≤ 2 MB)</span>
+        <div style={{display: "flex", gap: 14, alignItems: "center"}}>
+          <input type="file" accept="image/png,image/jpeg" onChange={e => {
+            const f = e.target.files && e.target.files[0]; if (!f) return;
+            if (f.size > 2 * 1024 * 1024) { setMsg({type: "error", text: "Logo exceeds 2 MB"}); return; }
+            if (!/^image\/(png|jpeg)$/.test(f.type)) { setMsg({type: "error", text: "Logo must be PNG or JPEG"}); return; }
+            const fr = new FileReader(); fr.onload = () => upd({logoFile: f, logoPreview: String(fr.result || "")}); fr.readAsDataURL(f);
+          }} style={{color: "#94a3b8", fontSize: 12}}/>
+          {d.logoPreview
+            ? <img src={d.logoPreview} alt="logo preview" style={{maxHeight: 48, maxWidth: 160, background: "#fff", borderRadius: 4, padding: 4}}/>
+            : <span style={{color: "#64748b", fontSize: 12}}>{d.logo_path ? "Logo stored" : "No logo"}</span>}
+        </div>
+        <div style={hint}>Logo upload happens when you click Save. Reports generated after a scan that used this profile are branded automatically.</div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{padding: "24px 32px", color: "#e2e8f0", minHeight: "100vh", overflow: "auto"}}>
+      <div style={{maxWidth: 1100, margin: "0 auto"}}>
+        <div style={{display: "flex", alignItems: "center", gap: 12, marginBottom: 6}}>
+          <button onClick={close} style={btn()}>← Back</button>
+          <h1 style={{fontSize: 24, fontWeight: 700}}>{d.id ? "Edit engagement: " + (d.name || "") : "New engagement profile"}</h1>
+          {dirty && <span style={{color: "#fbbf24", fontSize: 12}}>unsaved changes</span>}
+        </div>
+        <div style={{display: "flex", gap: 6, margin: "16px 0", flexWrap: "wrap"}}>
+          {STEPS.map((t, i) => (
+            <button key={t} onClick={() => setStep(i)}
+              style={{padding: "8px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      border: "1px solid " + (i === step ? "#3b82f6" : "#334155"), background: i === step ? "#1e3a8a" : "#0f172a", color: i === step ? "#fff" : "#94a3b8"}}>
+              {i + 1}. {t}{i === 4 && !d.auth.ack ? " *" : ""}
+            </button>
+          ))}
+        </div>
+        <Msg/>
+        {stepBody()}
+        <div style={{display: "flex", gap: 10, justifyContent: "space-between", marginTop: 6}}>
+          <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} style={{...btn(), opacity: step === 0 ? .4 : 1}}>← Previous</button>
+          <div style={{display: "flex", gap: 10}}>
+            {step < STEPS.length - 1 && <button onClick={() => setStep(step + 1)} style={btn()}>Next →</button>}
+            <button onClick={save} disabled={saving} style={btn("#3b82f6")}>{saving ? "Saving…" : (d.id ? "Save changes" : "Create profile")}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
+  // SESSION-COOKIE-V1: `token` is VL_SESSION (non-secret) once GET /api/auth/me
+  // confirms the HttpOnly cookie session; null = logged out. role/user/plan in
+  // localStorage are UI hints only — every authorization decision is server-side.
+  const [token,setToken]       = useState(null);
+  const [authChecked,setAuthChecked] = useState(false);
   const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
   const [username,setUsername] = useState(() => localStorage.getItem("cyberUser") || "");
   const [plan,setPlan]         = useState(() => localStorage.getItem("cyberPlan") || "trial");
@@ -24188,8 +24820,8 @@ export default function App() {
   const [reconSections, setReconSections] = useState(new Set());
 
   const handleLogin = (t, r, u, p) => {
-    setToken(t); setRole(r); setUsername(u); setPlan(p);
-    localStorage.setItem("cyberToken", t);
+    setToken(t || VL_SESSION); setRole(r); setUsername(u); setPlan(p);
+    setAuthChecked(true);
     localStorage.setItem("cyberRole", r);
     localStorage.setItem("cyberUser", u);
     localStorage.setItem("cyberPlan", p);
@@ -24200,6 +24832,15 @@ export default function App() {
     // Without the abort step, zombie scan requests keep hitting the backend after
     // logout, which prevented the user from logging back in (timeout on /api/auth/login).
     try { abortAllInFlight(); } catch {}
+    // SESSION-COOKIE-V1: the JWT cookie is HttpOnly, so only the server can
+    // clear it. Fire the logout first and reload once it settles (or 1.5s).
+    let _reloaded = false;
+    const _reload = () => { if (_reloaded) return; _reloaded = true; window.location.replace("/"); };
+    try {
+      fetch(API + "/api/auth/logout", {method:"POST", credentials:"include", keepalive:true})
+        .catch(() => {}).finally(() => setTimeout(_reload, 30));
+    } catch (_) {}
+    setTimeout(_reload, 1500);
     try {
       const preserve = {};
       const apiUrlSaved = localStorage.getItem("cyberApiUrl");
@@ -24209,9 +24850,32 @@ export default function App() {
       sessionStorage.clear();
     } catch {}
     setToken(null); setRole(""); setUsername(""); setPlan("trial");
-    // Force a full page reload so every React component remounts with empty state.
-    setTimeout(() => { window.location.replace("/"); }, 30);
+    // Full page reload (after logout settles, above) so every React component
+    // remounts with empty state.
   };
+
+  // SESSION-COOKIE-V1: "am I logged in" = does GET /api/auth/me succeed with
+  // the HttpOnly cookie. Raw fetch (not api()) so a 401 here does not trigger
+  // the auth-expired logout/reload loop.
+  useEffect(() => {
+    let alive = true;
+    fetch(API + "/api/auth/me", {credentials:"include"})
+      .then(r => r.ok ? r.json() : null)
+      .then(me => {
+        if (!alive) return;
+        if (me && me.username) {
+          vlSetCsrf(me.csrf_token);
+          setToken(VL_SESSION);
+          setRole(me.role || ""); setUsername(me.username || ""); setPlan(me.plan || "trial");
+          try { localStorage.setItem("cyberRole", me.role || ""); localStorage.setItem("cyberUser", me.username || ""); localStorage.setItem("cyberPlan", me.plan || "trial"); } catch (_) {}
+        } else {
+          setToken(null);
+        }
+      })
+      .catch(() => { if (alive) setToken(null); })
+      .finally(() => { if (alive) setAuthChecked(true); });
+    return () => { alive = false; };
+  }, []);
 
   const [trialInfo, setTrialInfo] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
@@ -24294,6 +24958,9 @@ export default function App() {
     }
   };
 
+  if (!authChecked) {
+    return <div style={{minHeight:"100vh",background:"#020617",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontFamily:"JetBrains Mono,monospace",fontSize:12}}>Checking session…</div>;
+  }
   if (!token) {
     return <AuthLanding onLogin={handleLogin}/>;
   }
@@ -24511,6 +25178,9 @@ export default function App() {
         </div>
         <div style={{display: active==="report"   ? "block" : "none"}}>
           <ReportModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="engagements" ? "block" : "none"}}>
+          <TargetProfilesModule token={token}/>
         </div>
         <div style={{display: active==="tools"    ? "block" : "none"}}>
           <ToolManagerModule token={token}/>
