@@ -28,7 +28,6 @@ Graceful degradation:
   • Customer can install on VPS via:
         pip install playwright && playwright install chromium
 """
-from __future__ import annotations
 
 import asyncio
 import re

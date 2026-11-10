@@ -14,7 +14,6 @@ Strategy for SaaS safety:
 - Crawl depth=1 (just the entry URL + its <form> targets)
 - Output parsed from sqlmap's findings summary lines
 """
-from __future__ import annotations
 
 import re
 import shutil

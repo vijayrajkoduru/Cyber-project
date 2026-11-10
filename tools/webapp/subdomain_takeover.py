@@ -12,7 +12,6 @@ Workflow:
      CNAME without fingerprint match -> INFO
      no CNAME or no service match -> POSITIVE
 """
-from __future__ import annotations
 
 import re
 from urllib.parse import urlparse

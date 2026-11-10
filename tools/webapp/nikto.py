@@ -14,7 +14,6 @@ labeling the scan as NOT IMPLEMENTED rather than fabricating results.
 
 Wall-clock budget: 90s (nikto's own -maxtime 60s + 30s parse margin).
 """
-from __future__ import annotations
 
 import csv
 import io
