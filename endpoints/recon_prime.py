@@ -203,6 +203,17 @@ async def cve_status(_=Depends(verify_admin)):
 @router.get("/api/admin/audit_log")
 async def audit_log(day: str = None, limit: int = 100, _=Depends(verify_admin)):
     day = day or time.strftime("%Y-%m-%d", time.gmtime())
+    # Strict YYYY-MM-DD only — `day` is interpolated into a filesystem path,
+    # so anything else (../, absolute paths, NULs) is path traversal.
+    import re as _re
+    import datetime as _dt
+    if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or ""):
+        raise HTTPException(status_code=400, detail="day must be YYYY-MM-DD")
+    try:
+        _dt.date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="day must be a valid YYYY-MM-DD date")
+    limit = max(1, min(int(limit or 100), 5000))
     f = _BASE / "audit" / f"{day}.jsonl"
     if not f.exists():
         return {"day": day, "entries": []}

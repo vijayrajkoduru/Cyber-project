@@ -123,8 +123,15 @@ def http_json(url: str, headers: dict | None = None,
     """Sync HTTP GET returning parsed JSON. None on any failure.
     Use http_json_async() inside async gatherers."""
     try:
-        r = requests.get(url, headers=headers or {}, timeout=timeout, verify=False)
+        r = requests.get(url, headers=headers or {}, timeout=timeout,
+                         verify=False, stream=True)
         if r.status_code != 200:
+            r.close()
+            return None
+        # HTTP-CAP-V1: never buffer an unbounded body from a third-party API.
+        from tools._shared import read_capped
+        read_capped(r)
+        if getattr(r, "vl_truncated", False):
             return None
         return r.json()
     except Exception:

@@ -10,8 +10,10 @@ Env: EMAIL_PROVIDER=zeptomail · EMAIL_API_KEY=Zoho-enczapikey ... ·
 """
 from __future__ import annotations
 
+import html as _html
 import json
 import logging
+import urllib.parse
 import os
 import urllib.request
 
@@ -64,7 +66,7 @@ def send_email(to: str, subject: str, html: str, *, text: str | None = None) -> 
 
 
 def send_verification_email(to: str, token: str) -> bool:
-    link = f"{app_base_url()}/verify-email?token={token}"
+    link = _html.escape(f"{app_base_url()}/verify-email?token={urllib.parse.quote(str(token), safe='')}")
     html = (f"<p>Welcome to VulnusLab. Please confirm your email:</p>"
             f'<p><a href="{link}">Verify my email</a></p>'
             f"<p>Or paste this link: {link}</p>"
@@ -77,17 +79,22 @@ def send_welcome_email(to: str, username: str, plan: str, verify_token: str | No
     """Onboarding email sent at signup: greets the customer, states their plan,
     and (optionally) includes the email-verification link in the same message."""
     plan_label = (plan or "trial").capitalize()
+    # User-controlled values are HTML-escaped (username is chosen at signup —
+    # unescaped it allowed HTML/link injection into our branded email).
+    safe_user = _html.escape(username or "", quote=True)
+    safe_plan = _html.escape(plan_label, quote=True)
     verify_block = ""
     if verify_token:
-        link = f"{app_base_url()}/verify-email?token={verify_token}"
+        link = _html.escape(f"{app_base_url()}/verify-email?token={urllib.parse.quote(str(verify_token), safe='')}")
         verify_block = (f'<p>First, confirm your email: '
                         f'<a href="{link}">Verify my email</a><br>'
                         f"<span style=\"color:#888\">{link}</span></p>")
-    html = (f"<h2>Welcome to VulnusLab, {username}!</h2>"
-            f"<p>Your account is ready. Current plan: <b>{plan_label}</b>.</p>"
+    html = (f"<h2>Welcome to VulnusLab, {safe_user}!</h2>"
+            f"<p>Your account is ready. Current plan: <b>{safe_plan}</b>.</p>"
             f"{verify_block}"
             f'<p>Sign in: <a href="{app_base_url()}">{app_base_url()}</a></p>'
             f"<p>Run your first scan from the dashboard, then download the PDF report.</p>"
             f"<p>Questions? Reply to this email.</p>")
+    plan_label = plan_label.replace("\r", " ").replace("\n", " ")
     return send_email(to, f"Welcome to VulnusLab — {plan_label} plan", html,
                       text=f"Welcome {username}! Plan: {plan_label}. Sign in: {app_base_url()}")

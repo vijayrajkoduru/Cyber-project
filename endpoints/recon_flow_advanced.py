@@ -11,7 +11,56 @@ _BASE = writable_base("VL_FLOW_DIR", "/app/vl_flow_data")
 for sub in ["screenshots","signatures","brands","collab","templates","rules"]:
     (_BASE/sub).mkdir(parents=True, exist_ok=True)
 
-_SIGN_KEY = os.environ.get("VL_FLOW_SIGN_KEY","vulnuslab-default-key-change-me").encode()
+_WEAK_SIGN_KEYS = {"", "vulnuslab-default-key-change-me", "change-me", "changeme", "secret"}
+
+
+def _load_sign_key() -> bytes:
+    """Report-signing HMAC key (FLOW-SIGNKEY-V1).
+
+    Never falls back to a hard-coded default (anyone could forge "valid"
+    report signatures with a public key). Order:
+      1. VL_FLOW_SIGN_KEY env (must be >= 32 chars and not a known default)
+      2. a random key persisted (0600) under the flow data dir, so signatures
+         survive restarts and are shared across workers
+      3. a random per-process key (signatures won't verify after restart)
+    """
+    import logging, secrets as _secrets
+    _log = logging.getLogger("vulnuslab.flow")
+    env = os.environ.get("VL_FLOW_SIGN_KEY", "")
+    if env and env not in _WEAK_SIGN_KEYS and len(env) >= 32:
+        return env.encode()
+    if env:
+        _log.warning("VL_FLOW_SIGN_KEY is weak/default (<32 chars or a known "
+                     "placeholder) — ignoring it.")
+    kf = _BASE / "signatures" / ".sign_key"
+    try:
+        if kf.exists():
+            k = kf.read_text(encoding="utf-8").strip()
+            if len(k) >= 32:
+                _log.warning("VL_FLOW_SIGN_KEY not set — using persisted random key %s", kf)
+                return k.encode()
+        k = _secrets.token_hex(32)
+        fd = os.open(str(kf), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(k)
+        _log.warning("VL_FLOW_SIGN_KEY not set — generated random signing key at %s. "
+                     "Set VL_FLOW_SIGN_KEY (>=32 chars) in production.", kf)
+        return k.encode()
+    except FileExistsError:
+        try:  # another worker won the race — use its key
+            k = kf.read_text(encoding="utf-8").strip()
+            if len(k) >= 32:
+                return k.encode()
+        except OSError:
+            pass
+    except OSError as exc:
+        _log.warning("could not persist flow signing key (%s)", exc)
+    _log.warning("VL_FLOW_SIGN_KEY not set — using a random PER-PROCESS signing "
+                 "key; report signatures will not verify after a restart.")
+    return _secrets.token_hex(32).encode()
+
+
+_SIGN_KEY = _load_sign_key()
 
 def _safe(s):
     """Strip path-traversal / separator chars from user-supplied path segments."""
@@ -30,6 +79,11 @@ class ScreenshotReq(BaseModel):
 async def capture_screenshot(req: ScreenshotReq, _=Depends(verify_scan_quota)):
     """Capture URL screenshot. Tries Playwright → screenshotapi.io fallback → error."""
     fid = _safe(req.finding_id) if req.finding_id else uuid.uuid4().hex[:12]
+    # Only http(s): a headless browser on file:// / chrome:// / view-source:
+    # would screenshot the API host's own files (LFI via screenshot).
+    from urllib.parse import urlparse as _urlparse
+    if _urlparse(req.url or "").scheme.lower() not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="url must be http:// or https://")
     out = _BASE/"screenshots"/f"{fid}.png"
     # Try Playwright (if installed in container)
     try:

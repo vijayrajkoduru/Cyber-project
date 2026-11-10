@@ -43,7 +43,7 @@ async def _shallow_clone(repo_url: str, dest: str) -> tuple[bool, str]:
         return False, "git not installed"
     try:
         proc = await asyncio.create_subprocess_exec(
-            GIT_BIN, "clone", "--depth", "1", "--no-tags", "--quiet", repo_url, dest,
+            GIT_BIN, "clone", "--depth", "1", "--no-tags", "--quiet", "--", repo_url, dest,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         try:

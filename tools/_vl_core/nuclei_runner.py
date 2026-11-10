@@ -104,10 +104,12 @@ def run_nuclei(req, tags: list[str], *,
            "-timeout", "10",
            "-stats=false", "-silent", "-no-color"]
 
+    # CRLF-V1: never let user-supplied auth values carry CR/LF into -H.
+    _hs = lambda v: (v or "").replace("\r", "").replace("\n", "").replace("\x00", "")
     if getattr(req, "auth_bearer", None):
-        cmd.extend(["-H", f"Authorization: Bearer {req.auth_bearer}"])
+        cmd.extend(["-H", f"Authorization: Bearer {_hs(req.auth_bearer)}"])
     if getattr(req, "auth_cookie", None):
-        cmd.extend(["-H", f"Cookie: {req.auth_cookie}"])
+        cmd.extend(["-H", f"Cookie: {_hs(req.auth_cookie)}"])
 
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,

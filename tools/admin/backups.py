@@ -78,6 +78,7 @@ EXCLUDE_PATTERNS = [
     "build",
     "*.bak",
     "_legacy_quarantine",
+    ".sign_key",                  # flow report-signing HMAC key (secret)
 ]
 
 

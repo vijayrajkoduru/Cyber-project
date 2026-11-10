@@ -114,6 +114,14 @@ def get_unpacked(path: str | Path) -> Path:
     Raises RuntimeError if no unpack method succeeded.
     """
     p = Path(path)
+    # Defense in depth (LFI-GUARD-V2): only ever unpack artifacts that live
+    # inside the upload/cache roots, even if a caller bypassed the HTTP guard.
+    try:
+        from tools._shared import is_contained_artifact
+    except Exception:  # pragma: no cover - _shared always importable in-app
+        is_contained_artifact = None
+    if is_contained_artifact is not None and not is_contained_artifact(str(p)):
+        raise FileNotFoundError(f"binary not in an allowed upload dir: {p.name}")
     if not p.is_file():
         raise FileNotFoundError(f"binary not found: {p}")
 

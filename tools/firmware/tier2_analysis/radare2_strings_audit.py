@@ -9,6 +9,7 @@ Customer input: ScanRequest.target = path to firmware blob.
 """
 from __future__ import annotations
 import asyncio
+import os
 import re
 import shutil
 from pathlib import Path
@@ -69,7 +70,7 @@ async def gather(ctx: ScanContext):
     bin_path = shutil.which("r2") or shutil.which("radare2")
     try:
         proc = await asyncio.create_subprocess_exec(
-            bin_path, "-qq", "-c", R2_CMD, "--", target,
+            bin_path, "-qq", "-c", R2_CMD, "--", os.path.abspath(target),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         try:

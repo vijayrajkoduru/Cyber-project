@@ -85,7 +85,7 @@ def _clone(repo_url: str) -> tuple[int, str, str]:
         proc = subprocess.run(
             ["git", "clone", "--depth", "1", "--quiet",
              "--config", "http.followRedirects=true",
-             repo_url, tmpdir],
+             "--", repo_url, tmpdir],
             capture_output=True, text=True,
             timeout=_GIT_TIMEOUT, check=False)
         if proc.returncode != 0:

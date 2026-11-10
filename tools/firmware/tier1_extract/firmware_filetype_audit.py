@@ -9,6 +9,7 @@ shadow file present = focus on credential extraction.
 Customer input: ScanRequest.target = path to firmware blob on disk.
 """
 from __future__ import annotations
+import os
 import shutil
 import subprocess
 import tempfile
@@ -44,7 +45,7 @@ async def gather(ctx: ScanContext):
     try:
         # Extract with binwalk (quiet, into tmpdir)
         try:
-            subprocess.run([BINWALK_BIN, "-e", "-q", "-C", tmpdir, target],
+            subprocess.run([BINWALK_BIN, "-e", "-q", "-C", tmpdir, "--", os.path.abspath(target)],
                           timeout=180, capture_output=True, check=False)
         except subprocess.TimeoutExpired:
             ctx.state["firmware_filetype_audit_error"] = "binwalk extract timeout (180s)"

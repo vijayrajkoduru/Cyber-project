@@ -36,10 +36,20 @@ def test_zip_rejected_when_too_many_entries(tmp_path, monkeypatch):
     assert bc._unpack_zipfile(archive, out) is False
 
 
-def test_get_unpacked_is_idempotent(tmp_path):
+def test_get_unpacked_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("VL_ARTIFACT_ROOTS", str(tmp_path))
     f = tmp_path / "sample.bin"
     f.write_bytes(b"\x7fELF" + b"\x00" * 32)
     d1 = bc.get_unpacked(f)
     d2 = bc.get_unpacked(f)            # cache hit -> same dir, no crash/race
     assert d1 == d2
     assert d1.is_dir()
+
+
+def test_get_unpacked_rejects_uncontained_path(tmp_path, monkeypatch):
+    monkeypatch.delenv("VL_ARTIFACT_ROOTS", raising=False)
+    f = tmp_path / "outside.bin"
+    f.write_bytes(b"\x7fELF" + b"\x00" * 32)
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        bc.get_unpacked(f)

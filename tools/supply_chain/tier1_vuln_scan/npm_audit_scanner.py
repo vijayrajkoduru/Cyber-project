@@ -70,7 +70,7 @@ async def gather(ctx: ScanContext):
             scan_dir = target
         elif repo_url and GIT_BIN:
             cleanup_dir = tempfile.mkdtemp(prefix="vlnpm_")
-            clone_res = await _run([GIT_BIN, "clone", "--depth", "1", repo_url, cleanup_dir],
+            clone_res = await _run([GIT_BIN, "clone", "--depth", "1", "--", repo_url, cleanup_dir],
                                   timeout=120)
             if clone_res.get("rc") != 0:
                 ctx.state["npm_audit_scanner_error"] = "git clone failed"
