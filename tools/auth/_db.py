@@ -174,6 +174,20 @@ _SCHEMA_DDL = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_tprof_owner ON target_profiles(owner_id)",
+    # ── Razorpay Pro purchases; payment_id PK makes grants idempotent
+    # (webhook + callback-verify may both fire). RAZORPAY-BILLING-V1.
+    """
+    CREATE TABLE IF NOT EXISTS billing_payments (
+        payment_id  TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        link_id     TEXT,
+        amount      INTEGER,
+        currency    TEXT,
+        source      TEXT,
+        created_at  TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_billpay_user ON billing_payments(user_id)",
 ]
 
 # Org role hierarchy — higher number = more privilege.

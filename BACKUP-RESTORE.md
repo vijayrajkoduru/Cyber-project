@@ -173,10 +173,13 @@ JWT_SECRET=<paste your saved JWT_SECRET — generate new if lost>
 ADMIN_PASSWORD=<your admin password>
 POSTGRES_PASSWORD=<the DB password — must match what your dump expects>
 CORS_ORIGINS=https://app.vulnuslab.com,https://vulnuslab.com
-LEMONSQUEEZY_API_KEY=<from LS dashboard>
-LEMONSQUEEZY_STORE_ID=<from LS dashboard>
-LEMONSQUEEZY_VARIANT_ID=<from LS dashboard>
-LEMONSQUEEZY_WEBHOOK_SECRET=<from LS dashboard>
+RAZORPAY_KEY_ID=<from Razorpay dashboard>
+RAZORPAY_KEY_SECRET=<from Razorpay dashboard>
+RAZORPAY_WEBHOOK_SECRET=<set when creating the webhook>
+# Webhook URL: https://<app>/api/billing/razorpay/webhook  (event: payment_link.paid)
+RAZORPAY_PRO_AMOUNT=19900      # minor units: 19900 = $199.00
+RAZORPAY_CURRENCY=USD          # USD needs International Payments enabled on the account
+PRO_PERIOD_DAYS=30
 VIRUSTOTAL_KEY=your_actual_key
 ABUSEIPDB_KEY=your_abuseipdb_key
 EOF

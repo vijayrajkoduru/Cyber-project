@@ -1273,7 +1273,7 @@ function LandingPage({onStart, onSignIn}) {
             </div>
           ))}
         </div>
-        <p style={{textAlign:"center", fontSize:12, color:"#475569", marginTop:18}}>Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime</p>
+        <p style={{textAlign:"center", fontSize:12, color:"#475569", marginTop:18}}>Secure payment by Razorpay · No credit card for trial · Cancel anytime</p>
       </div>
 
       {/* Testimonials */}
@@ -24915,16 +24915,29 @@ export default function App() {
     }
   }, [token, plan]);
 
-  // After returning from Lemon Squeezy checkout, refresh billing status
+  // After returning from Razorpay checkout: confirm the payment server-side
+  // (signature + API re-check), then refresh billing status.
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("billing=success") && token) {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        if (q.get("razorpay_payment_id") && q.get("razorpay_signature")) {
+          api("/api/billing/razorpay/verify","POST",{
+            razorpay_payment_id: q.get("razorpay_payment_id"),
+            razorpay_payment_link_id: q.get("razorpay_payment_link_id") || "",
+            razorpay_payment_link_reference_id: q.get("razorpay_payment_link_reference_id") || "",
+            razorpay_payment_link_status: q.get("razorpay_payment_link_status") || "",
+            razorpay_signature: q.get("razorpay_signature"),
+          }, token).then(d=>{ if (d) api("/api/billing/status","GET",null,token).then(setBillingInfo).catch(()=>{}); }).catch(()=>{});
+        }
+      } catch (e) { /* webhook will still apply the upgrade */ }
       // Webhooks take a few seconds; poll for 30s
       let tries = 0;
       const iv = setInterval(() => {
         tries++;
         api("/api/billing/status","GET",null,token).then(d => {
           setBillingInfo(d);
-          if (d.access === "pro" || tries >= 10) {
+          if (d.access === "active" || tries >= 10) {
             clearInterval(iv);
             // Clean the URL
             window.history.replaceState({}, "", window.location.pathname);

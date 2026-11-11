@@ -47,7 +47,7 @@ Pattern to copy: target input → phase selection → run/stop controls → tabs
 
 **User sees:** all 23 modules in sidebar, OWN scan history, OWN trial/sub status, upgrade button.
 
-**Admin only:** user management panel, all-users scan history, trial extend/plan change/suspend, Tool Manager, Settings, renewal log, system health, Lemon Squeezy events.
+**Admin only:** user management panel, all-users scan history, trial extend/plan change/suspend, Tool Manager, Settings, renewal log, system health, Razorpay billing events.
 
 Backend: every admin endpoint calls `_admin_only(user)` → HTTP 403 if not ADMIN.
 Frontend: admin UI wrapped in `{isSuperAdmin && (...)}`.

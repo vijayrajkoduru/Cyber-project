@@ -706,7 +706,7 @@ function Pricing() {
         </div>
         <FadeIn>
           <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 32 }}>
-            Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime
+            Secure payment by Razorpay · No credit card for trial · Cancel anytime
           </p>
         </FadeIn>
       </div>
