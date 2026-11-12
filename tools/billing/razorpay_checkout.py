@@ -8,7 +8,7 @@ Flow:
        - POST /api/billing/razorpay/verify   (frontend, with the callback params:
          signature checked with the key secret, then the link is re-fetched from
          the Razorpay API and must be paid, owned by this user, right amount), or
-       - POST /api/billing/razorpay/webhook  (Razorpay server-to-server,
+       - POST /api/billing/payment-webhook (alias: /api/billing/razorpay/webhook)  (Razorpay server-to-server,
          X-Razorpay-Signature = HMAC-SHA256(raw body, RAZORPAY_WEBHOOK_SECRET),
          event payment_link.paid).
 
@@ -143,6 +143,7 @@ class CheckoutRequest(BaseModel):
     redirect_url: Optional[str] = None
 
 
+@router.post("/api/account/upgrade")  # ADBLOCK-SAFE-V1 alias
 @router.post("/api/billing/checkout")
 async def checkout(req: CheckoutRequest, payload=Depends(verify_token)):
     key_id, secret = _cfg()
@@ -187,6 +188,7 @@ class VerifyRequest(BaseModel):
     razorpay_signature: str
 
 
+@router.post("/api/account/upgrade/confirm")  # ADBLOCK-SAFE-V1 alias
 @router.post("/api/billing/razorpay/verify")
 async def verify_callback(req: VerifyRequest, payload=Depends(verify_token)):
     key_id, secret = _cfg()
@@ -210,6 +212,8 @@ async def verify_callback(req: VerifyRequest, payload=Depends(verify_token)):
                       link.get("currency"), "callback")
 
 
+# Razorpay rejects webhook URLs containing "razorpay" -> register this one in the dashboard.
+@router.post("/api/billing/payment-webhook")
 @router.post("/api/billing/razorpay/webhook")
 async def webhook(request: Request):
     secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()

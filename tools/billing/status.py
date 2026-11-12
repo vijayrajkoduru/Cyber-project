@@ -40,6 +40,9 @@ async def trial_status(payload=Depends(verify_token)):
     }
 
 
+# Ad-blockers (Brave Shields, uBlock lists) block URLs containing "billing"; the
+# frontend uses the /api/account/* aliases. ADBLOCK-SAFE-V1
+@router.get("/api/account/plan")
 @router.get("/api/billing/status")
 async def billing_status(payload=Depends(verify_token)):
     plan = (payload.get("plan") or "trial").lower()

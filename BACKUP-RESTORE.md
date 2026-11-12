@@ -176,7 +176,7 @@ CORS_ORIGINS=https://app.vulnuslab.com,https://vulnuslab.com
 RAZORPAY_KEY_ID=<from Razorpay dashboard>
 RAZORPAY_KEY_SECRET=<from Razorpay dashboard>
 RAZORPAY_WEBHOOK_SECRET=<set when creating the webhook>
-# Webhook URL: https://<app>/api/billing/razorpay/webhook  (event: payment_link.paid)
+# Webhook URL: https://<app>/api/billing/payment-webhook  (event: payment_link.paid)
 RAZORPAY_PRO_AMOUNT=19900      # minor units: 19900 = $199.00
 RAZORPAY_CURRENCY=USD          # USD needs International Payments enabled on the account
 PRO_PERIOD_DAYS=30

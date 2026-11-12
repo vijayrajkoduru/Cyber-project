@@ -24911,7 +24911,7 @@ export default function App() {
       api("/api/trial/status","GET",null,token).then(d=>setTrialInfo(d)).catch(()=>{});
     }
     if (token) {
-      api("/api/billing/status","GET",null,token).then(d=>setBillingInfo(d)).catch(()=>{});
+      api("/api/account/plan","GET",null,token).then(d=>setBillingInfo(d)).catch(()=>{});
     }
   }, [token, plan]);
 
@@ -24922,20 +24922,20 @@ export default function App() {
       try {
         const q = new URLSearchParams(window.location.search);
         if (q.get("razorpay_payment_id") && q.get("razorpay_signature")) {
-          api("/api/billing/razorpay/verify","POST",{
+          api("/api/account/upgrade/confirm","POST",{
             razorpay_payment_id: q.get("razorpay_payment_id"),
             razorpay_payment_link_id: q.get("razorpay_payment_link_id") || "",
             razorpay_payment_link_reference_id: q.get("razorpay_payment_link_reference_id") || "",
             razorpay_payment_link_status: q.get("razorpay_payment_link_status") || "",
             razorpay_signature: q.get("razorpay_signature"),
-          }, token).then(d=>{ if (d) api("/api/billing/status","GET",null,token).then(setBillingInfo).catch(()=>{}); }).catch(()=>{});
+          }, token).then(d=>{ if (d) api("/api/account/plan","GET",null,token).then(setBillingInfo).catch(()=>{}); }).catch(()=>{});
         }
       } catch (e) { /* webhook will still apply the upgrade */ }
       // Webhooks take a few seconds; poll for 30s
       let tries = 0;
       const iv = setInterval(() => {
         tries++;
-        api("/api/billing/status","GET",null,token).then(d => {
+        api("/api/account/plan","GET",null,token).then(d => {
           setBillingInfo(d);
           if (d.access === "active" || tries >= 10) {
             clearInterval(iv);
@@ -24952,7 +24952,7 @@ export default function App() {
     if (upgrading) return;
     setUpgrading(true);
     try {
-      const res = await api("/api/billing/checkout", "POST",
+      const res = await api("/api/account/upgrade", "POST",
         { redirect_url: window.location.origin + "/?billing=success" }, token);
       if (res && res.url) {
         window.location.href = res.url;
@@ -25434,16 +25434,16 @@ export default function App() {
         )}
 
         {/* Trial Banner — within trial window */}
-        {isTrial && billingInfo && billingInfo.access === "trial" && trialInfo && (
-          <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : (billingInfo.trial_days_remaining<=2 ? "#1c0a00" : "#0c1a0c"),
-            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":(billingInfo.trial_days_remaining<=2?"#78350f":"#166534")}`,
+        {isTrial && trialInfo && (!billingInfo || billingInfo.access === "trial") && (
+          <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : ((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2 ? "#1c0a00" : "#0c1a0c"),
+            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2?"#78350f":"#166534")}`,
             padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
-            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"":(billingInfo.trial_days_remaining<=2?"":"")}</span>
+            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"":((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2?"":"")}</span>
             <div style={{flex:1}}>
-              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":(billingInfo.trial_days_remaining<=2?"#fb923c":"#4ade80")}}>
+              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2?"#fb923c":"#4ade80")}}>
                 {trialInfo.scans_remaining===0
                   ? "Daily scan limit reached — upgrade to Pro for unlimited scans"
-                  : `Trial: ${billingInfo.trial_days_remaining} day${billingInfo.trial_days_remaining!==1?"s":""} left  •  ${trialInfo.scans_remaining} scan${trialInfo.scans_remaining!==1?"s":""} remaining today`}
+                  : `Trial: ${(billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)} day${(billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)!==1?"s":""} left  •  ${trialInfo.scans_remaining} scan${trialInfo.scans_remaining!==1?"s":""} remaining today`}
               </span>
             </div>
             <div style={{display:"flex",gap:6}}>
