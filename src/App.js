@@ -24952,8 +24952,19 @@ export default function App() {
     if (upgrading) return;
     setUpgrading(true);
     try {
+      // CONTACT-REQ-V1: Razorpay needs the payer's phone for international links.
+      let contact = "";
+      try { contact = localStorage.getItem("vlPayPhone") || ""; } catch (_) {}
+      contact = window.prompt("Phone number for the payment receipt (with country code, e.g. +14155550123):", contact);
+      if (contact === null) { setUpgrading(false); return; }
+      contact = contact.trim();
+      if (!/^\+?[0-9\s\-()]{8,20}$/.test(contact)) {
+        alert("Please enter a valid phone number with country code, e.g. +919876543210");
+        setUpgrading(false); return;
+      }
+      try { localStorage.setItem("vlPayPhone", contact); } catch (_) {}
       const res = await api("/api/account/upgrade", "POST",
-        { redirect_url: window.location.origin + "/?billing=success" }, token);
+        { redirect_url: window.location.origin + "/?billing=success", contact }, token);
       if (res && res.url) {
         window.location.href = res.url;
       } else {

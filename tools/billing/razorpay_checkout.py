@@ -20,6 +20,7 @@ Env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET,
 import datetime
 import hashlib
 import hmac
+import re
 import json
 import logging
 import os
@@ -141,6 +142,10 @@ def _paid_payment_id(link: dict) -> Optional[str]:
 
 class CheckoutRequest(BaseModel):
     redirect_url: Optional[str] = None
+    contact: Optional[str] = None   # payer phone; Razorpay requires it for USD links
+
+
+_PHONE_RE = re.compile(r"^\+?[0-9]{8,15}$")
 
 
 @router.post("/api/account/upgrade")  # ADBLOCK-SAFE-V1 alias
@@ -160,8 +165,18 @@ async def checkout(req: CheckoutRequest, payload=Depends(verify_token)):
         "callback_method": "get",
         "notes": {"user_id": payload.get("sub"), "plan": "pro"},
     }
+    # CONTACT-REQ-V1: Razorpay rejects international (non-INR) payment links
+    # without full customer details (name + email + phone). We don't store phone
+    # numbers, so the frontend asks for one at checkout time.
+    contact = re.sub(r"[\s\-()]", "", req.contact or "")
+    if contact and not _PHONE_RE.match(contact):
+        raise HTTPException(400, "Enter a valid phone number with country code, e.g. +919876543210")
+    if _currency() != "INR" and not (contact and user.get("email")):
+        raise HTTPException(400, "phone_required: a phone number is required to pay")
     if user.get("email"):
         body["customer"] = {"email": user["email"], "name": user.get("username") or ""}
+        if contact:
+            body["customer"]["contact"] = contact
     try:
         r = requests.post(f"{_API}/payment_links", auth=(key_id, secret), json=body, timeout=20)
     except requests.RequestException as e:
@@ -223,6 +238,13 @@ async def webhook(request: Request):
     sig = request.headers.get("x-razorpay-signature", "")
     expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
+        # WEBHOOK-DIAG-V1: say *why* without logging any secret material.
+        key_secret = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
+        signed_with_key = bool(sig) and bool(key_secret) and hmac.compare_digest(
+            hmac.new(key_secret.encode(), raw, hashlib.sha256).hexdigest(), sig)
+        log.warning("razorpay webhook: bad signature (header_present=%s, body_bytes=%d, "
+                    "signed_with_api_key_secret=%s, event_id=%s)", bool(sig), len(raw),
+                    signed_with_key, request.headers.get("x-razorpay-event-id", ""))
         raise HTTPException(400, "Invalid signature")
     try:
         evt = json.loads(raw)
