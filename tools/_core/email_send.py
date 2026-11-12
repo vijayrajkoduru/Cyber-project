@@ -19,7 +19,9 @@ import urllib.request
 
 log = logging.getLogger("vulnuslab.email")
 
-_ZEPTO_URL = "https://api.zeptomail.com/v1.1/email"
+# ZeptoMail is region-specific: a key from zeptomail.zoho.in only works against
+# api.zeptomail.in (the .com host answers 401). EMAIL_API_URL overrides. ZEPTO-REGION-V1
+_ZEPTO_URL = (os.getenv("EMAIL_API_URL") or "https://api.zeptomail.com/v1.1/email").strip()
 
 
 def app_base_url() -> str:
