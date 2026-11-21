@@ -570,6 +570,13 @@ const APP_CSS = `
     --sev-critical:#ef4444; --sev-high:#f97316; --sev-medium:#eab308; --sev-low:#3b82f6; --sev-ok:#22c55e;
     --font-ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
     --font-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+    /* translucent status tints + borders (theme_pass2.py) — same in both themes */
+    --tint-red:rgba(239,68,68,.12); --tint-orange:rgba(249,115,22,.12); --tint-amber:rgba(234,179,8,.12);
+    --tint-green:rgba(34,197,94,.12); --tint-cyan:rgba(6,182,212,.12); --tint-blue:rgba(59,130,246,.12);
+    --tint-purple:rgba(168,85,247,.12); --tint-pink:rgba(236,72,153,.12);
+    --bd-red:rgba(239,68,68,.35); --bd-orange:rgba(249,115,22,.35); --bd-amber:rgba(234,179,8,.35);
+    --bd-green:rgba(34,197,94,.35); --bd-cyan:rgba(6,182,212,.35); --bd-blue:rgba(59,130,246,.35);
+    --bd-purple:rgba(168,85,247,.35); --bd-pink:rgba(236,72,153,.35);
     color-scheme:dark;
   }
   .vl-light{
@@ -584,6 +591,8 @@ const APP_CSS = `
     --t-fb923c:#c2410c; --t-f97316:#c2410c;
     --t-a78bfa:#6d28d9; --t-c084fc:#7e22ce; --t-8b5cf6:#6d28d9; --t-a855f7:#7e22ce;
     --t-22d3ee:#0e7490; --t-06b6d4:#0e7490; --t-f472b6:#be185d; --t-ec4899:#be185d;
+    --t-38bdf8:#0369a1; --t-7c3aed:#5b21b6; --t-a3e635:#4d7c0f; --t-bbf7d0:#15803d; --t-bfdbfe:#1d4ed8;
+    --t-dc2626:#b91c1c; --t-fdba74:#c2410c; --t-fecaca:#b91c1c;
     color-scheme:light;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -623,12 +632,21 @@ const APP_CSS = `
   .vl-app{display:flex;height:100vh;overflow:hidden;}
   .vl-side{width:248px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
   .vl-side.vl-enter{animation:vlFadeIn .35s ease-out both;}
-  .vl-brand{display:flex;align-items:center;gap:8px;padding:14px 16px 10px;}
-  .vl-brand img{width:26px;height:26px;object-fit:contain;}
-  .vl-brand-name{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--heading);}
-  .vl-brand-name b{color:var(--accent);font-weight:700;}
-  .vl-pill{display:inline-flex;align-items:center;gap:6px;margin:0 16px 10px;padding:3px 9px;border:1px solid var(--border);border-radius:999px;font-size:11px;color:var(--muted);background:var(--surface2);max-width:max-content;}
-  .vl-pill i{width:6px;height:6px;border-radius:50%;display:inline-block;}
+  .vl-brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 16px 12px;}
+  .vl-brand img{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
+  .vl-brand-name{font-size:18px;font-weight:800;letter-spacing:2px;line-height:1.1;color:var(--heading);text-transform:uppercase;}
+  .vl-brand-name b{color:var(--accent);font-weight:800;}
+  .vl-kali{display:flex;align-items:center;gap:10px;margin:0 12px 12px;padding:10px 12px;border-radius:8px;border:1px solid var(--bd-green);background:var(--tint-green);}
+  .vl-kali.off{border-color:var(--bd-red);background:var(--tint-red);}
+  .vl-kali.wait{border-color:var(--bd-amber);background:var(--tint-amber);}
+  .vl-kali i{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25);animation:pulse 2s infinite;}
+  .vl-kali.off i{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25);}
+  .vl-kali.wait i{background:#eab308;box-shadow:0 0 0 3px rgba(234,179,8,.25);}
+  .vl-kali .t{font-size:14px;font-weight:700;color:#16a34a;line-height:1.2;}
+  .vl-kali.off .t{color:#dc2626;} .vl-kali.wait .t{color:#ca8a04;}
+  .vl-kali .s{font-size:11px;color:var(--muted);line-height:1.3;margin-top:1px;}
+  .vl-app:not(.vl-light) .vl-kali .t{color:#4ade80;}
+  .vl-app:not(.vl-light) .vl-kali.off .t{color:#f87171;} .vl-app:not(.vl-light) .vl-kali.wait .t{color:#facc15;}
   .vl-search{padding:4px 12px 4px;}
   .vl-search input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;outline:none;}
   .vl-search input:focus{border-color:var(--accent);}
@@ -715,6 +733,87 @@ const APP_CSS = `
     .vl-side{transition:none;}
     .fade{animation:none;}
   }
+  /* Light-mode safety net for data-driven inline colours (scripts/theme_light_net.py) */
+  /* LIGHT-NET:BEGIN */
+  .vl-light [style^="background: rgb(2, 6, 23)"],.vl-light [style*="; background: rgb(2, 6, 23)"],.vl-light [style^="background-color: rgb(2, 6, 23)"],.vl-light [style*="; background-color: rgb(2, 6, 23)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(2, 6, 23)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(4, 120, 87)"],.vl-light [style*="; background: rgb(4, 120, 87)"],.vl-light [style^="background-color: rgb(4, 120, 87)"],.vl-light [style*="; background-color: rgb(4, 120, 87)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(4, 120, 87)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(5, 46, 22)"],.vl-light [style*="; background: rgb(5, 46, 22)"],.vl-light [style^="background-color: rgb(5, 46, 22)"],.vl-light [style*="; background-color: rgb(5, 46, 22)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(5, 46, 22)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(10, 15, 30)"],.vl-light [style*="; background: rgb(10, 15, 30)"],.vl-light [style^="background-color: rgb(10, 15, 30)"],.vl-light [style*="; background-color: rgb(10, 15, 30)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(10, 15, 30)"]{border-color:var(--border)!important}
+  .vl-light [style^="background: rgb(10, 18, 36)"],.vl-light [style*="; background: rgb(10, 18, 36)"],.vl-light [style^="background-color: rgb(10, 18, 36)"],.vl-light [style*="; background-color: rgb(10, 18, 36)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(10, 18, 36)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(10, 22, 40)"],.vl-light [style*="; background: rgb(10, 22, 40)"],.vl-light [style^="background-color: rgb(10, 22, 40)"],.vl-light [style*="; background-color: rgb(10, 22, 40)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(10, 22, 40)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(11, 17, 32)"],.vl-light [style*="; background: rgb(11, 17, 32)"],.vl-light [style^="background-color: rgb(11, 17, 32)"],.vl-light [style*="; background-color: rgb(11, 17, 32)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(11, 17, 32)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(15, 23, 42)"],.vl-light [style*="; background: rgb(15, 23, 42)"],.vl-light [style^="background-color: rgb(15, 23, 42)"],.vl-light [style*="; background-color: rgb(15, 23, 42)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(15, 23, 42)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(17, 24, 39)"],.vl-light [style*="; background: rgb(17, 24, 39)"],.vl-light [style^="background-color: rgb(17, 24, 39)"],.vl-light [style*="; background-color: rgb(17, 24, 39)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(17, 24, 39)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(17, 28, 51)"],.vl-light [style*="; background: rgb(17, 28, 51)"],.vl-light [style^="background-color: rgb(17, 28, 51)"],.vl-light [style*="; background-color: rgb(17, 28, 51)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(17, 28, 51)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(21, 128, 61)"],.vl-light [style*="; background: rgb(21, 128, 61)"],.vl-light [style^="background-color: rgb(21, 128, 61)"],.vl-light [style*="; background-color: rgb(21, 128, 61)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(21, 128, 61)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(22, 101, 52)"],.vl-light [style*="; background: rgb(22, 101, 52)"],.vl-light [style^="background-color: rgb(22, 101, 52)"],.vl-light [style*="; background-color: rgb(22, 101, 52)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(22, 101, 52)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(28, 0, 0)"],.vl-light [style*="; background: rgb(28, 0, 0)"],.vl-light [style^="background-color: rgb(28, 0, 0)"],.vl-light [style*="; background-color: rgb(28, 0, 0)"]{background:rgba(239,68,68,.10)!important}
+  .vl-light [style*="solid rgb(28, 0, 0)"]{border-color:rgba(239,68,68,.35)!important}
+  .vl-light [style^="background: rgb(28, 10, 0)"],.vl-light [style*="; background: rgb(28, 10, 0)"],.vl-light [style^="background-color: rgb(28, 10, 0)"],.vl-light [style*="; background-color: rgb(28, 10, 0)"]{background:rgba(249,115,22,.10)!important}
+  .vl-light [style*="solid rgb(28, 10, 0)"]{border-color:rgba(249,115,22,.35)!important}
+  .vl-light [style^="background: rgb(28, 21, 0)"],.vl-light [style*="; background: rgb(28, 21, 0)"],.vl-light [style^="background-color: rgb(28, 21, 0)"],.vl-light [style*="; background-color: rgb(28, 21, 0)"]{background:rgba(234,179,8,.10)!important}
+  .vl-light [style*="solid rgb(28, 21, 0)"]{border-color:rgba(234,179,8,.35)!important}
+  .vl-light [style^="background: rgb(30, 41, 59)"],.vl-light [style*="; background: rgb(30, 41, 59)"],.vl-light [style^="background-color: rgb(30, 41, 59)"],.vl-light [style*="; background-color: rgb(30, 41, 59)"]{background:rgba(59,130,246,.10)!important}
+  .vl-light [style*="solid rgb(30, 41, 59)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(31, 41, 55)"],.vl-light [style*="; background: rgb(31, 41, 55)"],.vl-light [style^="background-color: rgb(31, 41, 55)"],.vl-light [style*="; background-color: rgb(31, 41, 55)"]{background:rgba(59,130,246,.10)!important}
+  .vl-light [style*="solid rgb(31, 41, 55)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="color: rgb(34, 211, 238)"],.vl-light [style*="; color: rgb(34, 211, 238)"]{color:#1292a5!important}
+  .vl-light [style^="color: rgb(37, 99, 235)"],.vl-light [style*="; color: rgb(37, 99, 235)"]{color:#1240a5!important}
+  .vl-light [style^="background: rgb(45, 16, 0)"],.vl-light [style*="; background: rgb(45, 16, 0)"],.vl-light [style^="background-color: rgb(45, 16, 0)"],.vl-light [style*="; background-color: rgb(45, 16, 0)"]{background:rgba(249,115,22,.10)!important}
+  .vl-light [style*="solid rgb(45, 16, 0)"]{border-color:rgba(249,115,22,.35)!important}
+  .vl-light [style^="background: rgb(51, 65, 85)"],.vl-light [style*="; background: rgb(51, 65, 85)"],.vl-light [style^="background-color: rgb(51, 65, 85)"],.vl-light [style*="; background-color: rgb(51, 65, 85)"]{background:rgba(59,130,246,.10)!important}
+  .vl-light [style*="solid rgb(51, 65, 85)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="color: rgb(52, 211, 153)"],.vl-light [style*="; color: rgb(52, 211, 153)"]{color:#21976c!important}
+  .vl-light [style^="background: rgb(55, 65, 81)"],.vl-light [style*="; background: rgb(55, 65, 81)"],.vl-light [style^="background-color: rgb(55, 65, 81)"],.vl-light [style*="; background-color: rgb(55, 65, 81)"]{background:rgba(59,130,246,.10)!important}
+  .vl-light [style*="solid rgb(55, 65, 81)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="color: rgb(56, 189, 248)"],.vl-light [style*="; color: rgb(56, 189, 248)"]{color:#1278a5!important}
+  .vl-light [style^="color: rgb(59, 130, 246)"],.vl-light [style*="; color: rgb(59, 130, 246)"]{color:#124aa5!important}
+  .vl-light [style^="color: rgb(74, 222, 128)"],.vl-light [style*="; color: rgb(74, 222, 128)"]{color:#1c9b4b!important}
+  .vl-light [style^="background: rgb(77, 124, 15)"],.vl-light [style*="; background: rgb(77, 124, 15)"],.vl-light [style^="background-color: rgb(77, 124, 15)"],.vl-light [style*="; background-color: rgb(77, 124, 15)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(77, 124, 15)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="color: rgb(96, 165, 250)"],.vl-light [style*="; color: rgb(96, 165, 250)"]{color:#1254a5!important}
+  .vl-light [style^="color: rgb(109, 40, 217)"],.vl-light [style*="; color: rgb(109, 40, 217)"]{color:#4e1c9c!important}
+  .vl-light [style^="background: rgb(120, 53, 15)"],.vl-light [style*="; background: rgb(120, 53, 15)"],.vl-light [style^="background-color: rgb(120, 53, 15)"],.vl-light [style*="; background-color: rgb(120, 53, 15)"]{background:rgba(249,115,22,.10)!important}
+  .vl-light [style*="solid rgb(120, 53, 15)"]{border-color:rgba(249,115,22,.35)!important}
+  .vl-light [style^="color: rgb(124, 58, 237)"],.vl-light [style*="; color: rgb(124, 58, 237)"]{color:#4912a5!important}
+  .vl-light [style^="color: rgb(134, 239, 172)"],.vl-light [style*="; color: rgb(134, 239, 172)"]{color:#15a248!important}
+  .vl-light [style^="color: rgb(139, 92, 246)"],.vl-light [style*="; color: rgb(139, 92, 246)"]{color:#3f12a5!important}
+  .vl-light [style^="color: rgb(147, 51, 234)"],.vl-light [style*="; color: rgb(147, 51, 234)"]{color:#5f12a5!important}
+  .vl-light [style^="color: rgb(147, 197, 253)"],.vl-light [style*="; color: rgb(147, 197, 253)"]{color:#1258a5!important}
+  .vl-light [style^="color: rgb(163, 230, 53)"],.vl-light [style*="; color: rgb(163, 230, 53)"]{color:#6da314!important}
+  .vl-light [style^="color: rgb(167, 139, 250)"],.vl-light [style*="; color: rgb(167, 139, 250)"]{color:#3712a5!important}
+  .vl-light [style^="color: rgb(168, 85, 247)"],.vl-light [style*="; color: rgb(168, 85, 247)"]{color:#5e12a5!important}
+  .vl-light [style^="color: rgb(187, 247, 208)"],.vl-light [style*="; color: rgb(187, 247, 208)"]{color:#13a446!important}
+  .vl-light [style^="color: rgb(191, 219, 254)"],.vl-light [style*="; color: rgb(191, 219, 254)"]{color:#1254a5!important}
+  .vl-light [style^="color: rgb(219, 39, 119)"],.vl-light [style*="; color: rgb(219, 39, 119)"]{color:#9d1a55!important}
+  .vl-light [style^="color: rgb(220, 38, 38)"],.vl-light [style*="; color: rgb(220, 38, 38)"]{color:#9e1919!important}
+  .vl-light [style^="color: rgb(236, 72, 153)"],.vl-light [style*="; color: rgb(236, 72, 153)"]{color:#a5125b!important}
+  .vl-light [style^="color: rgb(239, 68, 68)"],.vl-light [style*="; color: rgb(239, 68, 68)"]{color:#a51212!important}
+  .vl-light [style^="color: rgb(244, 63, 94)"],.vl-light [style*="; color: rgb(244, 63, 94)"]{color:#a5122c!important}
+  .vl-light [style^="color: rgb(244, 114, 182)"],.vl-light [style*="; color: rgb(244, 114, 182)"]{color:#a5125f!important}
+  .vl-light [style^="color: rgb(245, 158, 11)"],.vl-light [style*="; color: rgb(245, 158, 11)"]{color:#a56f12!important}
+  .vl-light [style^="color: rgb(248, 113, 113)"],.vl-light [style*="; color: rgb(248, 113, 113)"]{color:#a51212!important}
+  .vl-light [style^="color: rgb(249, 115, 22)"],.vl-light [style*="; color: rgb(249, 115, 22)"]{color:#a54f12!important}
+  .vl-light [style^="color: rgb(250, 204, 21)"],.vl-light [style*="; color: rgb(250, 204, 21)"]{color:#a58812!important}
+  .vl-light [style^="color: rgb(251, 146, 60)"],.vl-light [style*="; color: rgb(251, 146, 60)"]{color:#a55412!important}
+  .vl-light [style^="color: rgb(251, 191, 36)"],.vl-light [style*="; color: rgb(251, 191, 36)"]{color:#a57c12!important}
+  .vl-light [style^="color: rgb(252, 165, 165)"],.vl-light [style*="; color: rgb(252, 165, 165)"]{color:#a51212!important}
+  .vl-light [style^="color: rgb(253, 186, 116)"],.vl-light [style*="; color: rgb(253, 186, 116)"]{color:#a55d12!important}
+  .vl-light [style^="color: rgb(253, 230, 138)"],.vl-light [style*="; color: rgb(253, 230, 138)"]{color:#a58812!important}
+  .vl-light [style^="color: rgb(254, 202, 202)"],.vl-light [style*="; color: rgb(254, 202, 202)"]{color:#a51212!important}
+  /* LIGHT-NET:END */
 `;
 
 // Tracks all in-flight AbortControllers so handleLogout can cancel them all
@@ -922,9 +1021,9 @@ function ScanAuthConsent() {
   };
   const pickRole = (role) => { if (active) vlSetActiveProfile({...active, role}); };
   const covered = !!(active && active.auth_ok);
-  const selStyle = {background:"#0f172a",border:"1px solid #334155",borderRadius:4,padding:"5px 8px",color:"#e2e8f0",fontSize:11,outline:"none",maxWidth:"100%"};
+  const selStyle = {background:"var(--surface2)",border:"1px solid var(--bd-blue)",borderRadius:4,padding:"5px 8px",color:"var(--text)",fontSize:11,outline:"none",maxWidth:"100%"};
   return (
-    <div style={{margin:"10px 0",padding:"9px 11px",background:covered?"#052e16":"#1a1206",border:"1px solid "+(covered?"#166534":"#7c2d12"),borderRadius:6}}>
+    <div style={{margin:"10px 0",padding:"9px 11px",background:covered?"var(--tint-green)":"var(--surface2)",border:"1px solid "+(covered?"var(--bd-green)":"var(--bd-orange)"),borderRadius:6}}>
       <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:active?6:8,fontSize:11,color:"var(--text)"}}>
         <b style={{color:"var(--t-93c5fd, #93c5fd)"}}>Engagement profile</b>
         <select value={active ? active.id : ""} onChange={e=>pickProfile(e.target.value)} style={selStyle}>
@@ -941,19 +1040,19 @@ function ScanAuthConsent() {
         {loadErr && <span style={{color:"var(--t-fca5a5, #fca5a5)"}}>profiles unavailable: {loadErr}</span>}
       </div>
       {active && (
-        <div style={{fontSize:11,lineHeight:1.5,color:covered?"var(--t-86efac, #86efac)":"#fdba74",marginBottom:covered?0:8}}>
+        <div style={{fontSize:11,lineHeight:1.5,color:covered?"var(--t-86efac, #86efac)":"var(--t-fdba74, #fdba74)",marginBottom:covered?0:8}}>
           {covered
             ? <>Consent covered by the profile's signed authorization — {active.signer} ({active.signer_company}), signed {active.signed_date}. Scope, rate limit, time window{active.destructive_allowed ? "" : " and no-destructive-tests"} are enforced server-side; out-of-scope targets are refused.</>
             : <>This profile has no valid signed authorization ({active.auth_reason || "missing"}). Scope/safety still apply, but you must confirm authorization below — or complete the Authorization step in Engagements.</>}
           {active.targets && active.targets.length > 0 && <div style={{color:"var(--muted)"}}>In-scope primary targets: {active.targets.join(", ")}</div>}
         </div>
       )}
-      {!covered && <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"var(--t-86efac, #86efac)":"#fdba74",lineHeight:1.4}}>
+      {!covered && <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"var(--t-86efac, #86efac)":"var(--t-fdba74, #fdba74)",lineHeight:1.4}}>
         <input type="checkbox" checked={ack} onChange={e=>{const v=e.target.checked; setAck(v); write(v);}} style={{marginTop:2}}/>
         <span><b>Authorization</b> — I own this target or have written permission to test it. Scanning systems without authorization is illegal; this acknowledgment is logged. Practice labs (lab_*) are exempt.</span>
       </label>}
       {!covered && ack && (
-        <input value={scope} onChange={e=>{setScope(e.target.value); writeScope(e.target.value);}} placeholder="Authorization reference (ticket / contract / asset owner) — optional" style={{marginTop:7,width:"100%",background:"var(--surface)",border:"1px solid #7c2d12",borderRadius:4,padding:"6px 9px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+        <input value={scope} onChange={e=>{setScope(e.target.value); writeScope(e.target.value);}} placeholder="Authorization reference (ticket / contract / asset owner) — optional" style={{marginTop:7,width:"100%",background:"var(--surface)",border:"1px solid var(--bd-orange)",borderRadius:4,padding:"6px 9px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
       )}
     </div>
   );
@@ -1017,19 +1116,20 @@ function Badge(props) {
   const color = props.color || "blue";
   const size  = props.size || "sm";
   const colors = {
-    blue:   {bg:"#0c1a3d", b:"#1e40af", t:"#60a5fa"},
-    green:  {bg:"#052e16", b:"#166534", t:"#4ade80"},
-    red:    {bg:"#1c0000", b:"#991b1b", t:"#f87171"},
-    yellow: {bg:"#2d1f00", b:"#92400e", t:"#fbbf24"},
-    purple: {bg:"#1a0a3d", b:"#5b21b6", t:"#a78bfa"},
-    gray:   {bg:"#0f172a", b:"#334155", t:"#94a3b8"},
-    orange: {bg:"#2d1000", b:"#9a3412", t:"#fb923c"},
+    // ENTERPRISE-UI-V1: translucent tints so badges work in both themes
+    blue:   {bg:"var(--tint-blue)",   b:"var(--bd-blue)",   t:"var(--t-60a5fa, #60a5fa)"},
+    green:  {bg:"var(--tint-green)",  b:"var(--bd-green)",  t:"var(--t-4ade80, #4ade80)"},
+    red:    {bg:"var(--tint-red)",    b:"var(--bd-red)",    t:"var(--t-f87171, #f87171)"},
+    yellow: {bg:"var(--tint-amber)",  b:"var(--bd-amber)",  t:"var(--t-fbbf24, #fbbf24)"},
+    purple: {bg:"var(--tint-purple)", b:"var(--bd-purple)", t:"var(--t-a78bfa, #a78bfa)"},
+    gray:   {bg:"var(--surface2)",    b:"var(--border2)",   t:"var(--muted)"},
+    orange: {bg:"var(--tint-orange)", b:"var(--bd-orange)", t:"var(--t-fb923c, #fb923c)"},
   };
   const c  = colors[color] || colors.blue;
   const fs = size === "xs" ? 9 : 11;
   const pd = size === "xs" ? "1px 6px" : "2px 8px";
   return (
-    <span style={{background:c.bg,border:"1px solid "+c.b,color:c.t,fontSize:fs,fontWeight:600,padding:pd,borderRadius:4,whiteSpace:"nowrap",letterSpacing:.3}}>
+    <span style={{background:c.bg,border:"1px solid "+c.b,color:c.t,fontSize:fs,fontWeight:600,padding:pd,borderRadius:999,whiteSpace:"nowrap",letterSpacing:.2}}>
       {label}
     </span>
   );
@@ -1097,13 +1197,13 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
         disabled={_disabled}
         title={`Clear all scan results, cache, and history for the ${module} module (this user only)`}
         style={{
-          background: _disabled ? "var(--border)" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
-          border: "1px solid " + (_disabled ? "var(--border2)" : "#a78bfa"),
-          color: _disabled ? "var(--dim)" : "#fff",
-          padding: "7px 16px",
-          borderRadius: 6,
-          fontSize: 12,
-          fontWeight: 700,
+          background: "var(--surface)",
+          border: "1px solid var(--border2)",
+          color: _disabled ? "var(--dim)" : "var(--text)",
+          padding: "7px 14px",
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 500,
           cursor: _disabled ? "not-allowed" : "pointer",
           opacity: _disabled ? 0.5 : 1,
           display: "inline-flex",
@@ -1121,7 +1221,7 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
       {lastMsg && (
         <span style={{
           fontSize:11,
-          fontFamily:"JetBrains Mono,monospace",
+          fontFamily:"var(--font-mono)",
           color: lastMsg.startsWith("") ? "var(--t-4ade80, #4ade80)" : "var(--t-fb923c, #fb923c)",
           padding:"2px 8px",
           background:"var(--bg)",
@@ -1828,7 +1928,7 @@ function Terminal(props) {
           <div style={{width:9,height:9,borderRadius:"50%",background:"#f59e0b",opacity:.8}}/>
           <div style={{width:9,height:9,borderRadius:"50%",background:"#22c55e",opacity:.8}}/>
         </div>
-        <span style={{fontSize:11,color:"var(--border2)",fontFamily:"JetBrains Mono,monospace"}}>Terminal — kali@backend</span>
+        <span style={{fontSize:11,color:"var(--border2)",fontFamily:"var(--font-mono)"}}>Terminal — kali@backend</span>
       </div>
       <div ref={ref} style={{padding:14,height:height,overflowY:"auto"}}>
         {lines.map((l,i) => {
@@ -1838,8 +1938,8 @@ function Terminal(props) {
           const color   = isOk?"#22c55e":isErr?"#ef4444":isArrow?"#60a5fa":"#64748b";
           return (
             <div key={i} style={{display:"flex",gap:8,marginBottom:2}}>
-              <span style={{color:"var(--border)",fontFamily:"JetBrains Mono,monospace",fontSize:10,flexShrink:0}}>{String(i+1).padStart(3,"0")}</span>
-              <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:12,color:color,lineHeight:1.7}}>{l}</span>
+              <span style={{color:"var(--border)",fontFamily:"var(--font-mono)",fontSize:10,flexShrink:0}}>{String(i+1).padStart(3,"0")}</span>
+              <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:color,lineHeight:1.7}}>{l}</span>
             </div>
           );
         })}
@@ -1869,18 +1969,18 @@ function TestTargets({targets, onSelect}) {
       {open && (
         <div style={{background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:6,marginTop:6,overflow:"hidden",
           animation: closing ? "fadeOut .3s ease forwards" : "fadeIn .2s ease"}}>
-          <div style={{background:"var(--surface)",padding:"6px 12px",borderBottom:"1px solid var(--border)",fontSize:10,color:"var(--dim)",fontWeight:600,letterSpacing:1}}>
+          <div style={{background:"var(--surface)",padding:"6px 12px",borderBottom:"1px solid var(--border)",fontSize:10,color:"var(--dim)",fontWeight:600,letterSpacing:0.5}}>
             INTENTIONALLY VULNERABLE — CREDENTIALS AUTO-FILL ON CLICK
           </div>
           {(targets || []).map((t, i) => (
             <div key={i} onClick={() => copy(t.value, t.lab || null, i)}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid var(--surface)",cursor:"pointer",background:copied===i?"#1e3a5f":"transparent",transition:"background .15s"}}>
+              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid var(--surface)",cursor:"pointer",background:copied===i?"var(--tint-blue)":"transparent",transition:"background .15s"}}>
               <span style={{fontSize:14}}>{t.icon}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:600,color:"var(--heading)"}}>{t.label}
-                  {t.lab && <span style={{fontSize:9,color:"var(--t-4ade80, #4ade80)",marginLeft:8,fontWeight:700,background:"#052e16",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN </span>}
+                  {t.lab && <span style={{fontSize:9,color:"var(--t-4ade80, #4ade80)",marginLeft:8,fontWeight:700,background:"var(--tint-green)",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN </span>}
                 </div>
-                <div style={{fontSize:10,color:"var(--muted)",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
+                <div style={{fontSize:10,color:"var(--muted)",fontFamily:"var(--font-mono)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
                 {t.desc && <div style={{fontSize:9,color:"var(--dim)",marginTop:1}}>{t.desc}</div>}
               </div>
               <span style={{fontSize:10,color:copied===i?"var(--t-4ade80, #4ade80)":"var(--border2)",fontWeight:700,flexShrink:0}}>{copied===i?"Selected":"Click"}</span>
@@ -3638,15 +3738,15 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
   if(!open) return null;
   const fld = (label,value,setKey,placeholder,extra) => (
     <div style={{marginBottom:14}}>
-      <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
+      <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>{label}</label>
       <input value={value||""} onChange={e=>setCfg(p=>({...p,[setKey]:e.target.value}))}
         placeholder={placeholder} {...(extra||{})}
-        style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"10px 14px",color:"var(--text)",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:extra&&extra.mono?"JetBrains Mono,monospace":"inherit"}}/>
+        style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"10px 14px",color:"var(--text)",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:extra&&extra.mono?"var(--font-mono)":"var(--font-ui)"}}/>
     </div>
   );
   const sel = (label,value,setKey,opts) => (
     <div style={{marginBottom:14}}>
-      <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
+      <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>{label}</label>
       <select value={value||""} onChange={e=>setCfg(p=>({...p,[setKey]:e.target.value}))}
         style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"10px 14px",color:"var(--text)",fontSize:13,outline:"none",boxSizing:"border-box"}}>
         {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
@@ -3662,7 +3762,7 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
       <div onClick={e => e.stopPropagation()}
         style={{background:"var(--surface2)",border:"1px solid var(--nav-active)",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div style={{color:"var(--text)",fontWeight:800,fontSize:17}}>Customize {moduleLabel||"Report"}</div>
+          <div style={{color:"var(--text)",fontWeight:600,fontSize:17}}>Customize {moduleLabel||"Report"}</div>
           <button onClick={onClose}
             title="Close (Esc)"
             style={{background:"none",border:"1px solid var(--border2)",borderRadius:6,padding:"3px 10px",color:"var(--muted)",fontSize:14,fontWeight:700,cursor:"pointer",lineHeight:1}}>×</button>
@@ -3682,7 +3782,7 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
         {fld("Report Date (optional)", cfg.date, "date", "")}
         {/* Logo */}
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
+          <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
           <div style={{display:"flex",gap:10,alignItems:"center"}}>
             <label style={{background:"var(--border)",border:"1px dashed var(--border2)",borderRadius:7,padding:"10px 18px",color:"var(--t-93c5fd, #93c5fd)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
               Upload Logo
@@ -3724,24 +3824,24 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
           ])}
         </div>
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional — overrides default)</label>
+          <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional — overrides default)</label>
           <textarea value={cfg.customExecSummary||""} onChange={e=>setCfg(p=>({...p,customExecSummary:e.target.value}))}
             placeholder="Override the auto-generated executive summary."
             rows={3}
-            style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"10px 14px",color:"var(--text)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+            style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"10px 14px",color:"var(--text)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"var(--font-ui)",resize:"vertical"}}/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{marginBottom:14}}>
-            <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer (optional)</label>
+            <label style={{display:"block",color:"var(--muted)",fontSize:11,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer (optional)</label>
             <textarea value={cfg.customDisclaimer||""} onChange={e=>setCfg(p=>({...p,customDisclaimer:e.target.value}))}
               placeholder="Legal/CYA text" rows={2}
-              style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"8px 12px",color:"var(--text)",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+              style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:7,padding:"8px 12px",color:"var(--text)",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"var(--font-ui)",resize:"vertical"}}/>
           </div>
           {fld("Custom Footer Text (optional)", cfg.customFooterText, "customFooterText", "Override default footer")}
         </div>
         {/* Password */}
         <div style={{marginBottom:18,background:"var(--surface2)",border:"1px solid var(--nav-active)",borderRadius:8,padding:14}}>
-          <label style={{display:"flex",alignItems:"center",gap:8,color:"var(--t-93c5fd, #93c5fd)",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,color:"var(--t-93c5fd, #93c5fd)",fontSize:12,fontWeight:700,letterSpacing:0.5,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={cfg.encrypt!==false} onChange={e=>setCfg(p=>({...p,encrypt:e.target.checked}))}
               style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
             PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
@@ -3750,7 +3850,7 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
             <>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <input value={cfg.password||""} onChange={e=>setCfg(p=>({...p,password:e.target.value}))}
-                  style={{flex:1,background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:6,padding:"8px 12px",color:"var(--t-fbbf24, #fbbf24)",fontFamily:"JetBrains Mono,monospace",fontSize:13,fontWeight:700,outline:"none",boxSizing:"border-box"}}/>
+                  style={{flex:1,background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:6,padding:"8px 12px",color:"var(--t-fbbf24, #fbbf24)",fontFamily:"var(--font-mono)",fontSize:13,fontWeight:700,outline:"none",boxSizing:"border-box"}}/>
                 <button onClick={()=>setCfg(p=>({...p,password:_genPwd()}))}
                   style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:6,padding:"8px 14px",color:"var(--t-60a5fa, #60a5fa)",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Regenerate</button>
                 <button onClick={()=>navigator.clipboard.writeText(cfg.password).then(()=>alert("Password copied:\n\n"+cfg.password+"\n\nSave it — you'll need it to open the PDF."))}
@@ -5033,7 +5133,7 @@ function WebAppModule(props) {
 
   return (
     <div className="fade">
-      <div style={{background:"linear-gradient(135deg,#0c1a3d,var(--surface))",border:"1px solid var(--nav-active)",borderRadius:8,padding:20,marginBottom:16}}>
+      <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:8,padding:20,marginBottom:16}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
           <span style={{fontSize:20}}></span>
@@ -5048,10 +5148,10 @@ function WebAppModule(props) {
             finished (rich SCANNING panel below covers the live progress). */}
         {finished && !running && (
           <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:11,color:"var(--t-22c55e, #22c55e)",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>
+            <span style={{fontSize:11,color:"var(--t-22c55e, #22c55e)",fontFamily:"var(--font-mono)",fontWeight:700}}>
               {done.length} / {PHASES.length} phases complete
             </span>
-            <span style={{fontSize:11,color:"var(--t-22c55e, #22c55e)",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>100%</span>
+            <span style={{fontSize:11,color:"var(--t-22c55e, #22c55e)",fontFamily:"var(--font-mono)",fontWeight:700}}>100%</span>
           </div>
         )}
 
@@ -5104,7 +5204,7 @@ function WebAppModule(props) {
           {showHistory && targetHistory.length>0 && !running && (
             <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
               {targetHistory.map((t,i)=>(
-                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--t-93c5fd, #93c5fd)",fontFamily:"JetBrains Mono,monospace"}}
+                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--t-93c5fd, #93c5fd)",fontFamily:"var(--font-mono)"}}
                   onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   <span style={{color:"var(--border2)",fontSize:10}}>{i+1}</span>{t}
                 </div>
@@ -5120,19 +5220,19 @@ function WebAppModule(props) {
                 <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Authenticated scan (optional)</span>
                 <span style={{fontSize:10,color:"var(--dim)"}}>— behind-login: IDOR, stored XSS, mass-assignment</span>
               </div>
-              {(authCookie||authBearer) && <span style={{background:"#052e16",color:"var(--t-4ade80, #4ade80)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
+              {(authCookie||authBearer) && <span style={{background:"var(--tint-green)",color:"var(--t-4ade80, #4ade80)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
             </div>
             {showAuthPanel && (
               <div style={{padding:"12px",borderTop:"1px solid var(--border)",display:"flex",flexDirection:"column",gap:10}}>
-                <div style={{fontSize:10,color:"var(--text)",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid var(--nav-active)"}}>
+                <div style={{fontSize:10,color:"var(--text)",lineHeight:1.6,background:"var(--tint-blue)",padding:"8px 10px",borderRadius:5,border:"1px solid var(--nav-active)"}}>
                   <b style={{color:"var(--t-86efac, #86efac)"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
                 </div>
                 <div style={{background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"10px 12px"}}>
                   <div style={{fontSize:11,color:"var(--t-86efac, #86efac)",fontWeight:700,marginBottom:6}}>Auto-login (recommended)</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-wap-u" style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-wap-p" style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-wap-u" style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-wap-p" style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                     <button onClick={async ()=>{
@@ -5151,7 +5251,7 @@ function WebAppModule(props) {
                         } catch(e){ setAutoLoginStatus("Login request failed: "+(e.message||e)); }
                         finally { setAutoLoginBusy(false); }
                       }} disabled={autoLoginBusy}
-                      style={{background:autoLoginBusy?"var(--border)":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"var(--dim)":"var(--surface)",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
+                      style={{background:autoLoginBusy?"var(--border)":"#22c55e",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"var(--dim)":"var(--surface)",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
                       {autoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
                     </button>
                     {(autoLoginStatus && autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"var(--t-4ade80, #4ade80)",fontWeight:600}}>Logged in — cookie captured</span>}
@@ -5162,11 +5262,11 @@ function WebAppModule(props) {
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                    <input value={authCookie} onChange={e=>{_setScopedAuth(target, e.target.value, authBearer);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authCookie} onChange={e=>{_setScopedAuth(target, e.target.value, authBearer);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Bearer Token</div>
-                    <input value={authBearer} onChange={e=>{_setScopedAuth(target, authCookie, e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authBearer} onChange={e=>{_setScopedAuth(target, authCookie, e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                 </div>
                 {(authCookie||authBearer) && (
@@ -5188,15 +5288,15 @@ function WebAppModule(props) {
               placeholder="example.com  or  http://192.168.1.1:8080"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
-              style={{flex:3,minWidth:220,background:"var(--bg)",border:"1px solid "+(running?"#3b82f6":"var(--nav-active)"),borderRadius:6,padding:"11px 14px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
+              style={{flex:3,minWidth:220,background:"var(--bg)",border:"1px solid "+(running?"#3b82f6":"var(--nav-active)"),borderRadius:6,padding:"11px 14px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
             {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
-              <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"var(--t-fb923c, #fb923c)",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+              <div style={{background:"var(--tint-orange)",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"var(--t-fb923c, #fb923c)",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
                 Auth required — click the target button to auto-login first
               </div>
             )}
             {!running ? (
               <button onClick={run} disabled={!target.trim()}
-                style={{background:target.trim()?"linear-gradient(135deg,#3b82f6,#06b6d4)":"var(--border)",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"var(--dim)",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+                style={{background:target.trim()?"var(--accent)":"var(--border)",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"var(--dim)",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
                 ▶ Start Full Pentest
               </button>
             ) : (
@@ -5207,7 +5307,7 @@ function WebAppModule(props) {
             )}
             {running && (
               <button onClick={stop} disabled={stopped}
-                style={{background:"linear-gradient(135deg,#dc2626,#991b1b)",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
+                style={{background:"#dc2626",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
                 ■ Stop Scan
               </button>
             )}
@@ -5222,7 +5322,7 @@ function WebAppModule(props) {
               const lb=sc<40?"CRITICAL":sc<70?"HIGH":sc<90?"MEDIUM":sc<100?"LOW":"SAFE";
               const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
               return <>
-                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
+                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"var(--heading)",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
                 <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Result(pdf)</button>
                 <div style={{position:"relative"}}>
                   <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:6,padding:"11px 16px",color:"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
@@ -5272,7 +5372,7 @@ function WebAppModule(props) {
           {id:"methodology",label:"Methodology"},
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{background:tab===t.id?"var(--nav-active)":"var(--surface)",border:"1px solid "+(tab===t.id?"#3b82f6":"var(--border)"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"#fff":"var(--dim)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            style={{background:tab===t.id?"var(--nav-active)":"var(--surface)",border:"1px solid "+(tab===t.id?"#3b82f6":"var(--border)"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"var(--heading)":"var(--dim)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
             {t.label}
           </button>
         ))}
@@ -5295,7 +5395,7 @@ function WebAppModule(props) {
 
         {/* Badge Legend */}
         <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:8,flexWrap:"wrap"}}>
-          <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+          <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>RESULTS:</span>
           {[
             {label:"SECURE",     color:"#4ade80", bg:"#052e16", desc:"No vulnerability found"},
             {label:"VULNERABLE", color:"#f87171", bg:"#1c0000", desc:"Security issue detected"},
@@ -5323,16 +5423,16 @@ function WebAppModule(props) {
           const currentPhase = curPhase >= 0 ? PHASES[curPhase] : null;
           const totalFindings = liveCounts.CRITICAL + liveCounts.HIGH + liveCounts.MEDIUM + liveCounts.LOW;
           return (
-            <div style={{background:"linear-gradient(180deg,var(--surface) 0%,var(--surface) 100%)",border:"1px solid var(--nav-active)",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
               {/* Row 1: progress + current phase + timing */}
               <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 280px",minWidth:240}}>
-                  <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:1}}>SCANNING</span>
-                  <span style={{fontSize:13,color:"var(--text)",fontWeight:600,fontFamily:"monospace"}}>
+                  <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>SCANNING</span>
+                  <span style={{fontSize:13,color:"var(--text)",fontWeight:600,fontFamily:"var(--font-mono)"}}>
                     {currentPhase ? `${currentPhase.icon||""} ${currentPhase.name}` : "Initializing..."}
                   </span>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"monospace",color:"var(--muted)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"var(--font-mono)",color:"var(--muted)"}}>
                   <span>Phase <b style={{color:"var(--t-3b82f6, #3b82f6)"}}>{doneCount}</b>/<b style={{color:"var(--text)"}}>{totalCount}</b></span>
                   <span>Elapsed <b style={{color:"var(--t-22c55e, #22c55e)"}}>{fmt(elapsed)}</b></span>
                   {eta !== null && <span>ETA <b style={{color:"var(--t-f59e0b, #f59e0b)"}}>~{fmt(eta)}</b></span>}
@@ -5340,18 +5440,18 @@ function WebAppModule(props) {
               </div>
               {/* Row 2: progress bar */}
               <div style={{height:6,background:"var(--surface)",borderRadius:3,overflow:"hidden",border:"1px solid var(--border)"}}>
-                <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#3b82f6 0%,#22c55e 100%)",transition:"width 0.6s ease",borderRadius:3}}/>
+                <div style={{height:"100%",width:`${pct}%`,background:"var(--accent)",transition:"width 0.6s ease",borderRadius:3}}/>
               </div>
               {/* Row 3: live finding counter */}
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:1}}>FINDINGS SO FAR:</span>
+                <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>FINDINGS SO FAR:</span>
                 {[
                   {label:"CRITICAL", n:liveCounts.CRITICAL, color:"#f87171", bg:"#1c0000"},
                   {label:"HIGH",     n:liveCounts.HIGH,     color:"#fb923c", bg:"#1c0a00"},
                   {label:"MEDIUM",   n:liveCounts.MEDIUM,   color:"#fbbf24", bg:"#1c1500"},
                   {label:"LOW",      n:liveCounts.LOW,      color:"#4ade80", bg:"#052e16"},
                 ].map(s=>(
-                  <span key={s.label} style={{background:s.bg,border:`1px solid ${s.color}50`,color:s.color,fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:5,fontFamily:"monospace"}}>
+                  <span key={s.label} style={{background:s.bg,border:`1px solid ${s.color}50`,color:s.color,fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:5,fontFamily:"var(--font-mono)"}}>
                     {s.n} {s.label}
                   </span>
                 ))}
@@ -5366,7 +5466,7 @@ function WebAppModule(props) {
         {/* Phase selection controls */}
         {!running && (
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-            <span style={{color:"var(--dim)",fontSize:12,fontFamily:"monospace"}}>{selectedPhases.size}/{PHASES.length} phases selected</span>
+            <span style={{color:"var(--dim)",fontSize:12,fontFamily:"var(--font-mono)"}}>{selectedPhases.size}/{PHASES.length} phases selected</span>
             <button onClick={()=>setSelectedPhases(new Set(PHASES.map((_,i)=>i)))}
               style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:5,padding:"4px 12px",color:"var(--t-22c55e, #22c55e)",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               Select All
@@ -5387,7 +5487,7 @@ function WebAppModule(props) {
             ))}
           </div>
         )}
-        <div style={{border:"1px solid var(--border)",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
+        <div style={{border:"1px solid var(--border)",borderRadius:6,overflow:"hidden",background:"var(--surface2)"}}>
         {PHASES.map((ph,i) => {
           const isActive   = curPhase === i;
           const isDone     = done.includes(i);
@@ -5411,14 +5511,14 @@ function WebAppModule(props) {
           return (
             <React.Fragment key={i}>
             {secHdr && (
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px 6px",borderTop:i===0?"none":"1px solid var(--border)",background:"#0a0f1c"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px 6px",borderTop:i===0?"none":"1px solid var(--border)",background:"var(--surface2)"}}>
                 <div style={{width:3,height:18,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
                 <div style={{flex:1}}>
                   <div style={{fontSize:10,fontWeight:700,color:secHdr.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{secHdr.label}</div>
                   <div style={{fontSize:10,color:"var(--dim)"}}>{secHdr.sub}</div>
                 </div>
                 {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"var(--t-f59e0b, #f59e0b)",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>TRIAL</span>}
-                {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#6b7280",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>PRO</span>}
+                {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"var(--dim)",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>PRO</span>}
               </div>
             )}
             <div onClick={()=>{
@@ -5439,7 +5539,7 @@ function WebAppModule(props) {
               )}
               <span style={{fontSize:13,fontWeight:500,color:toolLocked?"var(--dim)":"var(--heading)",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
               <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
-              <span style={{fontSize:11,color:"var(--muted)",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
+              <span style={{fontSize:11,color:"var(--muted)",fontFamily:"var(--font-mono)",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
               {isDone && res && (
                 <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
                   style={{background:expandedTile===i?"var(--nav-active)":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"var(--border)"),borderRadius:4,padding:"3px 10px",color:"var(--muted)",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
@@ -5457,19 +5557,19 @@ function WebAppModule(props) {
                 so the customer never has to crack open DevTools or SSH into
                 the VPS to figure out why a scan failed. */}
             {expandedTile === i && isDone && res && (
-              <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"var(--surface2)",border:"1px solid "+(isFailed?"#7f1d1d":isVuln||isSQLi?"#7c2d12":"#14532d"),borderLeft:"3px solid "+(isFailed?"#ef4444":isVuln||isSQLi?"#f97316":"#22c55e"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
+              <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"var(--surface2)",border:"1px solid "+(isFailed?"var(--bd-red)":isVuln||isSQLi?"var(--bd-orange)":"var(--bd-green)"),borderLeft:"3px solid "+(isFailed?"#ef4444":isVuln||isSQLi?"#f97316":"#22c55e"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
                 {/* Header */}
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                   <span style={{fontSize:14}}>{isFailed?"":isVuln||isSQLi?"":""}</span>
-                  <span style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:isFailed?"var(--t-fca5a5, #fca5a5)":isVuln||isSQLi?"#fdba74":"var(--t-86efac, #86efac)"}}>
+                  <span style={{fontSize:12,fontWeight:600,letterSpacing:0.5,color:isFailed?"var(--t-fca5a5, #fca5a5)":isVuln||isSQLi?"var(--t-fdba74, #fdba74)":"var(--t-86efac, #86efac)"}}>
                     {isFailed?"SCAN FAILED — DETAILS":isVuln||isSQLi?"FINDINGS — REVIEW":"SCAN COMPLETE — NO ISSUES"}
                   </span>
                 </div>
 
                 {/* Error message (from {error: ...} in response) */}
                 {(res.error || res.detail) && (
-                  <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:6,color:"#fecaca"}}>
-                    <div style={{fontSize:10,fontWeight:800,color:"var(--t-f87171, #f87171)",letterSpacing:1.5,marginBottom:4}}>ERROR</div>
+                  <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:6,color:"var(--t-fecaca, #fecaca)"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:"var(--t-f87171, #f87171)",letterSpacing:0.5,marginBottom:4}}>ERROR</div>
                     <div style={{wordBreak:"break-word"}}>{res.error || res.detail}</div>
                   </div>
                 )}
@@ -5477,7 +5577,7 @@ function WebAppModule(props) {
                 {/* Suggested action — the friendly "what to try" hint */}
                 {res.suggested_action && (
                   <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(251,191,36,0.10)",border:"1px solid rgba(251,191,36,0.35)",borderRadius:6,color:"var(--t-fde68a, #fde68a)"}}>
-                    <span style={{fontSize:11,fontWeight:800,color:"var(--t-fbbf24, #fbbf24)",marginRight:6}}>What to try:</span>
+                    <span style={{fontSize:11,fontWeight:600,color:"var(--t-fbbf24, #fbbf24)",marginRight:6}}>What to try:</span>
                     {res.suggested_action}
                   </div>
                 )}
@@ -5485,7 +5585,7 @@ function WebAppModule(props) {
                 {/* Findings list (when scan succeeded and found issues) */}
                 {Array.isArray(res.findings) && res.findings.length > 0 && (
                   <div style={{marginBottom:10}}>
-                    <div style={{fontSize:10,fontWeight:800,color:"var(--muted)",letterSpacing:1.5,marginBottom:6}}>
+                    <div style={{fontSize:10,fontWeight:600,color:"var(--muted)",letterSpacing:0.5,marginBottom:6}}>
                       FINDINGS ({res.findings.length})
                     </div>
                     <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
@@ -5495,9 +5595,9 @@ function WebAppModule(props) {
                         return (
                           <div key={fi} style={{padding:"8px 10px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:5,borderLeft:`3px solid ${sevColor}`}}>
                             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                              <span style={{fontSize:9,fontWeight:800,color:sevColor,background:sevColor+"22",padding:"1px 6px",borderRadius:3,letterSpacing:1}}>{sev}</span>
+                              <span style={{fontSize:9,fontWeight:600,color:sevColor,background:sevColor+"22",padding:"1px 6px",borderRadius:3,letterSpacing:0.5}}>{sev}</span>
                               {f.cvss && <span style={{fontSize:9,color:"var(--muted)"}}>CVSS {f.cvss}</span>}
-                              {f.cve && f.cve !== "N/A" && <span style={{fontSize:9,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"monospace"}}>{f.cve}</span>}
+                              {f.cve && f.cve !== "N/A" && <span style={{fontSize:9,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"var(--font-mono)"}}>{f.cve}</span>}
                             </div>
                             <div style={{fontSize:11,color:"var(--text)"}}>{f.detail}</div>
                             {f.remediation && (
@@ -5525,7 +5625,7 @@ function WebAppModule(props) {
                   </div>
                 )}
                 {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && !(res._skipped || res.skipped_reason || res.status === "skipped") && (
-                  <div style={{padding:"10px 12px",background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.30)",borderRadius:6,color:"#bbf7d0"}}>
+                  <div style={{padding:"10px 12px",background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.30)",borderRadius:6,color:"var(--t-bbf7d0, #bbf7d0)"}}>
                     Scan completed cleanly — no issues detected for this target.
                   </div>
                 )}
@@ -5555,7 +5655,7 @@ function WebAppModule(props) {
             tools that produced it. INSIDE the outer phases-tab container so
             the ternary remains a single expression. */}
         <div style={{marginTop:18}}>
-          <div style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
+          <div style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5,marginBottom:6,textTransform:"uppercase"}}>
             Live Scan Terminal
           </div>
           <Terminal lines={lines} height={160}/>
@@ -5617,15 +5717,15 @@ function WebAppModule(props) {
                   <div key={i} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:8,padding:"14px 16px",borderLeft:`3px solid ${c}`}}>
                     <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
                       <span style={{background:c+"20",color:c,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.severity}</span>
-                      {f.cve&&f.cve!=="N/A"&&<span style={{background:"#fef2f2",color:"#dc2626",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>CVE: {f.cve}</span>}
-                      {f.cwe&&f.cwe!=="N/A"&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.cwe}</span>}
+                      {f.cve&&f.cve!=="N/A"&&<span style={{background:"#fef2f2",color:"var(--t-dc2626, #dc2626)",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>CVE: {f.cve}</span>}
+                      {f.cwe&&f.cwe!=="N/A"&&<span style={{background:"#f5f3ff",color:"var(--t-7c3aed, #7c3aed)",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.cwe}</span>}
                       <span style={{fontSize:9,color:"var(--dim)"}}>CVSS: {f.cvss||"N/A"}</span>
                       {f.owasp&&f.owasp!=="N/A"&&<span style={{fontSize:9,color:"var(--dim)",background:"var(--bg)",padding:"2px 6px",borderRadius:3,border:"1px solid var(--border)"}}>{f.owasp}</span>}
-                      <span style={{marginLeft:"auto",fontSize:9,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"monospace"}}>via {f.source}</span>
+                      <span style={{marginLeft:"auto",fontSize:9,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"var(--font-mono)"}}>via {f.source}</span>
                     </div>
                     <div style={{fontSize:12,color:"var(--text)",marginBottom:8}}>{f.detail}</div>
-                    {f.evidence && <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"4px 8px",fontSize:10,color:"var(--muted)",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"var(--text)"}}>Evidence:</strong> {vlEvidenceOrNone(f)}</div>}
-                    {f.remediation && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"var(--t-4ade80, #4ade80)"}}>
+                    {f.evidence && <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"4px 8px",fontSize:10,color:"var(--muted)",fontFamily:"var(--font-mono)",marginBottom:6}}><strong style={{color:"var(--text)"}}>Evidence:</strong> {vlEvidenceOrNone(f)}</div>}
+                    {f.remediation && <div style={{background:"var(--tint-green)",border:"1px solid var(--bd-green)",borderRadius:4,padding:"6px 10px",fontSize:11,color:"var(--t-4ade80, #4ade80)"}}>
                       <strong>Fix:</strong> {f.remediation}
                     </div>}
                   </div>
@@ -5640,7 +5740,7 @@ function WebAppModule(props) {
       {/* METHODOLOGY TAB */}
       {tab==="methodology" && (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{background:"#0c1a3d",border:"1px solid var(--nav-active)",borderRadius:8,padding:"12px 16px",marginBottom:4}}>
+          <div style={{background:"var(--tint-blue)",border:"1px solid var(--nav-active)",borderRadius:8,padding:"12px 16px",marginBottom:4}}>
             <div style={{fontSize:13,fontWeight:700,color:"var(--t-93c5fd, #93c5fd)",marginBottom:4}}>WAPT Methodology — 15 Categories</div>
             <div style={{fontSize:11,color:"var(--dim)"}}>= Tool available in your platform | = Partially covered | = Manual/external tool needed</div>
           </div>
@@ -5755,7 +5855,7 @@ function WebAppModule(props) {
             <div key={ci} style={{background:"var(--surface)",border:`1px solid ${cat.color}30`,borderRadius:8,overflow:"hidden"}}>
               <div style={{background:cat.color+"15",padding:"10px 16px",borderBottom:`1px solid ${cat.color}30`,display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:16}}>{cat.icon}</span>
-                <span style={{fontSize:11,fontWeight:700,color:cat.color,letterSpacing:1}}>{cat.num}</span>
+                <span style={{fontSize:11,fontWeight:700,color:cat.color,letterSpacing:0.5}}>{cat.num}</span>
                 <span style={{fontSize:13,fontWeight:700,color:"var(--heading)"}}>{cat.cat}</span>
                 <div style={{marginLeft:"auto",display:"flex",gap:4}}>
                   <span style={{fontSize:9,background:"#052e1650",color:"var(--t-22c55e, #22c55e)",padding:"2px 6px",borderRadius:3}}>
@@ -5775,7 +5875,7 @@ function WebAppModule(props) {
                     <span style={{fontSize:14,flexShrink:0,marginTop:1}}>{t.status}</span>
                     <div style={{flex:1}}>
                       <div style={{fontSize:11,fontWeight:600,color:"var(--text)",marginBottom:2}}>{t.name}</div>
-                      <div style={{fontSize:9,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"monospace",marginBottom:1}}>{t.tool}</div>
+                      <div style={{fontSize:9,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"var(--font-mono)",marginBottom:1}}>{t.tool}</div>
                       <div style={{fontSize:9,color:"var(--dim)"}}>{t.desc}</div>
                     </div>
                   </div>
@@ -5825,7 +5925,7 @@ function SystemHealth() {
           </div>
         </div>
         {failed.length===0 ? (
-          <div style={{background:"var(--bg)",border:"1px solid #166534",borderRadius:6,padding:"12px 14px",fontSize:12,color:"var(--t-86efac, #86efac)"}}>
+          <div style={{background:"var(--bg)",border:"1px solid var(--bd-green)",borderRadius:6,padding:"12px 14px",fontSize:12,color:"var(--t-86efac, #86efac)"}}>
             All {loaded} module(s) loaded cleanly — no boot failures.
           </div>
         ) : (
@@ -5833,7 +5933,7 @@ function SystemHealth() {
             <div style={{fontSize:12,fontWeight:600,color:"var(--t-ef4444, #ef4444)",marginBottom:6}}>Failed modules ({failed.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
               {failed.map((f,i) => (
-                <div key={i} style={{background:"var(--bg)",border:"1px solid #7f1d1d",borderRadius:6,padding:"10px 14px",fontSize:11,color:"var(--t-fca5a5, #fca5a5)",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>{nm(f)}</div>
+                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--bd-red)",borderRadius:6,padding:"10px 14px",fontSize:11,color:"var(--t-fca5a5, #fca5a5)",fontFamily:"var(--font-mono)",wordBreak:"break-all"}}>{nm(f)}</div>
               ))}
             </div>
           </div>
@@ -5843,7 +5943,7 @@ function SystemHealth() {
             <div style={{fontSize:12,fontWeight:600,color:"var(--t-eab308, #eab308)",marginBottom:6}}>Self-healed modules ({healed.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
               {healed.map((h,i) => (
-                <div key={i} style={{background:"var(--bg)",border:"1px solid #854d0e",borderRadius:6,padding:"10px 14px",fontSize:11,color:"var(--t-fde68a, #fde68a)",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>{nm(h)}</div>
+                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--bd-orange)",borderRadius:6,padding:"10px 14px",fontSize:11,color:"var(--t-fde68a, #fde68a)",fontFamily:"var(--font-mono)",wordBreak:"break-all"}}>{nm(h)}</div>
               ))}
             </div>
           </div>
@@ -5889,7 +5989,7 @@ function ScanHistory(props) {
             {scans.length > 0 && (
               <button onClick={clearHistory} disabled={clearing}
                 style={{padding:"6px 14px",fontSize:11,fontWeight:600,
-                  background:clearing?"#374151":"#dc2626",color:"#fff",
+                  background:clearing?"var(--tint-blue)":"#dc2626",color:"#fff",
                   border:"none",borderRadius:6,cursor:clearing?"wait":"pointer",
                   letterSpacing:.3}}>
                 {clearing ? "Clearing..." : "Clear All"}
@@ -5909,8 +6009,8 @@ function ScanHistory(props) {
             <tbody>
               {scans.map((s,i) => (
                 <tr key={i} className="row" style={{borderBottom:"1px solid var(--surface)",background:i%2===0?"var(--bg)":"transparent"}}>
-                  <td style={{padding:"10px 16px",fontSize:12,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"JetBrains Mono,monospace"}}>{s.tool}</td>
-                  <td style={{padding:"10px 16px",fontSize:12,color:"var(--text)",fontFamily:"JetBrains Mono,monospace"}}>{s.target}</td>
+                  <td style={{padding:"10px 16px",fontSize:12,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"var(--font-mono)"}}>{s.tool}</td>
+                  <td style={{padding:"10px 16px",fontSize:12,color:"var(--text)",fontFamily:"var(--font-mono)"}}>{s.target}</td>
                   <td style={{padding:"10px 16px"}}><Badge label={s.status} color={s.status==="complete"?"green":"red"} size="xs"/></td>
                   <td style={{padding:"10px 16px",fontSize:11,color:"var(--dim)"}}>{new Date(s.timestamp).toLocaleString()}</td>
                 </tr>
@@ -5946,7 +6046,7 @@ function GuideModule() {
       background: tab===id ? "#22c55e22" : "transparent",
       color: tab===id ? G : DIM,
       borderBottom: tab===id ? `2px solid ${G}` : "2px solid transparent",
-      transition:"all 0.2s", fontFamily:"monospace", letterSpacing:1
+      transition:"all 0.2s", fontFamily:"var(--font-mono)", letterSpacing:0.5
     }}>{icon} {label}</button>
   );
 
@@ -5956,20 +6056,20 @@ function GuideModule() {
       border: `1px solid ${copied===id ? G : "var(--border2)"}`,
       color: copied===id ? G : "var(--muted)",
       borderRadius:6, padding:"4px 12px", fontSize:11, cursor:"pointer",
-      fontFamily:"monospace", fontWeight:700, transition:"all 0.2s", whiteSpace:"nowrap"
+      fontFamily:"var(--font-mono)", fontWeight:700, transition:"all 0.2s", whiteSpace:"nowrap"
     }}>{copied===id ? "COPIED" : "COPY"}</button>
   );
 
   const Block = ({id, label, code, comment}) => (
     <div style={{marginBottom:16}}>
       <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
-        <span style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", letterSpacing:1}}>{label}</span>
+        <span style={{color:G, fontWeight:700, fontSize:12, fontFamily:"var(--font-mono)", letterSpacing:0.5}}>{label}</span>
         <CopyBtn text={code} id={id}/>
       </div>
-      {comment && <div style={{color:"var(--dim)", fontSize:11, fontFamily:"monospace", marginBottom:6}}># {comment}</div>}
+      {comment && <div style={{color:"var(--dim)", fontSize:11, fontFamily:"var(--font-mono)", marginBottom:6}}># {comment}</div>}
       <pre style={{
         background:"var(--bg)", border:"1px solid var(--border)", borderRadius:8, padding:"14px 16px",
-        color:"var(--text)", fontSize:12, fontFamily:"'Courier New',monospace", margin:0,
+        color:"var(--text)", fontSize:12, fontFamily:"var(--font-mono)", margin:0,
         overflowX:"auto", lineHeight:1.7, whiteSpace:"pre-wrap", wordBreak:"break-word"
       }}>{code}</pre>
     </div>
@@ -5985,13 +6085,13 @@ function GuideModule() {
           <span style={{color:"var(--text)", fontWeight:700, fontSize:13}}>{name}</span>
           <span style={{
             marginLeft:10, background:`${color||G}22`, color:color||G,
-            borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, fontFamily:"monospace"
+            borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)"
           }}>{type}</span>
         </div>
         <CopyBtn text={url} id={name}/>
       </div>
       <div style={{color:"var(--muted)", fontSize:12, marginBottom:8}}>{desc}</div>
-      <code style={{color:G, fontSize:12, fontFamily:"monospace", background:"var(--bg)", padding:"4px 10px", borderRadius:5}}>{url}</code>
+      <code style={{color:G, fontSize:12, fontFamily:"var(--font-mono)", background:"var(--bg)", padding:"4px 10px", borderRadius:5}}>{url}</code>
     </div>
   );
 
@@ -6048,7 +6148,7 @@ journalctl -u uvicorn -n 50
   return (
     <div style={{padding:"28px 32px", maxWidth:960, margin:"0 auto"}}>
       <div style={{marginBottom:24}}>
-        <div style={{color:G, fontWeight:800, fontSize:22, fontFamily:"monospace", letterSpacing:2, marginBottom:4}}>RUN GUIDE & LAB TARGETS</div>
+        <div style={{color:G, fontWeight:600, fontSize:22, fontFamily:"var(--font-mono)", letterSpacing:0.5, marginBottom:4}}>RUN GUIDE & LAB TARGETS</div>
         <div style={{color:DIM, fontSize:13}}>Copy-paste commands to start everything · Vulnerable lab URLs for testing</div>
       </div>
 
@@ -6063,7 +6163,7 @@ journalctl -u uvicorn -n 50
 
       {tab === "startup" && (
         <div>
-          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"var(--font-mono)", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             Run STEP 1 (Kali) first, then STEP 2 (Windows). Always in this order.
           </div>
           <Block id="step1" label="STEP 1 — KALI TERMINAL" code={startupKali} comment="Paste all at once into Kali terminal. Leave it running." />
@@ -6072,7 +6172,7 @@ journalctl -u uvicorn -n 50
           <Block id="scp"   label="TRANSFER FILES TO KALI (Windows)" code={scpFiles} comment="Run from oscp-dashboard folder on Windows when backend files are updated" />
           <Block id="logs"  label="CHECK BACKEND ERRORS" code={checkLogs} />
           <div style={{background:"var(--surface2)", border:"1px solid var(--border)", borderRadius:10, padding:"14px 16px", marginTop:8}}>
-            <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", marginBottom:10}}>LOGIN CREDENTIALS</div>
+            <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"var(--font-mono)", marginBottom:10}}>LOGIN CREDENTIALS</div>
             <div style={{display:"flex", gap:24}}>
               <div><span style={{color:DIM, fontSize:12}}>Username: </span><code style={{color:"var(--text)", fontSize:13}}>admin</code></div>
               <div><span style={{color:DIM, fontSize:12}}>Password: </span><code style={{color:"var(--text)", fontSize:13}}>admin123</code></div>
@@ -6084,12 +6184,12 @@ journalctl -u uvicorn -n 50
 
       {tab === "fix" && (
         <div>
-          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"var(--font-mono)", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             If any scan phase shows ERROR — endpoint missing, use these commands on Kali.
           </div>
           <Block id="fix1" label="CHECK & FIX MISSING ENDPOINTS (KALI)" code={fixEndpoints} comment="Run on Kali. Checks what's in main.py then appends missing endpoints." />
           <div style={{background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"16px 18px", marginTop:8}}>
-            <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", marginBottom:12}}>ENDPOINT REFERENCE — ALL 25 PHASES</div>
+            <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"var(--font-mono)", marginBottom:12}}>ENDPOINT REFERENCE — ALL 25 PHASES</div>
             <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6}}>
               {[
                 ["wafw00f","backend_additions.py"],["whatweb","main.py"],["cms","main.py"],
@@ -6102,7 +6202,7 @@ journalctl -u uvicorn -n 50
                 ["xxe","backend_additions2.py"],["clickjacking","backend_additions2.py"],["verbtamper","backend_additions2.py"],
                 ["pollution","backend_additions2.py"],
               ].map(([ep, file]) => (
-                <div key={ep} style={{display:"flex", justifyContent:"space-between", padding:"5px 10px", background:"var(--bg)", borderRadius:6, fontSize:11, fontFamily:"monospace"}}>
+                <div key={ep} style={{display:"flex", justifyContent:"space-between", padding:"5px 10px", background:"var(--bg)", borderRadius:6, fontSize:11, fontFamily:"var(--font-mono)"}}>
                   <span style={{color:G}}>/{ep}</span>
                   <span style={{color:DIM}}>{file}</span>
                 </div>
@@ -6114,14 +6214,14 @@ journalctl -u uvicorn -n 50
 
       {tab === "labs" && (
         <div>
-          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"var(--font-mono)", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             Click COPY next to any URL then paste into the scanner target field. Local targets need Kali VM running.
           </div>
           <div style={{display:"flex", gap:10, marginBottom:16, flexWrap:"wrap"}}>
             {[["LOCAL","#22c55e"],["ONLINE","#a855f7"],["DOWNLOAD","#64748b"],["LOCAL VM","#22c55e"]].map(([t,c])=>(
-              <div key={t} style={{background:`${c}22`, color:c, borderRadius:6, padding:"3px 12px", fontSize:11, fontWeight:700, fontFamily:"monospace"}}>{t}</div>
+              <div key={t} style={{background:`${c}22`, color:c, borderRadius:6, padding:"3px 12px", fontSize:11, fontWeight:700, fontFamily:"var(--font-mono)"}}>{t}</div>
             ))}
-            <div style={{color:DIM, fontSize:11, alignSelf:"center", fontFamily:"monospace"}}>— color legend</div>
+            <div style={{color:DIM, fontSize:11, alignSelf:"center", fontFamily:"var(--font-mono)"}}>— color legend</div>
           </div>
           {labs.map((l,i) => <LabCard key={i} {...l}/>)}
         </div>
@@ -6129,7 +6229,7 @@ journalctl -u uvicorn -n 50
 
       {tab === "checklist" && (
         <div>
-          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"var(--muted)", fontSize:12, marginBottom:20, fontFamily:"var(--font-mono)", background:"var(--bg)", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             Run through this every session before scanning.
           </div>
           {[
@@ -6152,13 +6252,13 @@ journalctl -u uvicorn -n 50
               <div style={{
                 width:32, height:32, borderRadius:8, background:"#22c55e22", border:`1px solid ${G}`,
                 display:"flex", alignItems:"center", justifyContent:"center",
-                color:G, fontWeight:800, fontSize:12, fontFamily:"monospace", flexShrink:0
+                color:G, fontWeight:600, fontSize:12, fontFamily:"var(--font-mono)", flexShrink:0
               }}>{step}</div>
               <div style={{flex:1}}>
                 <div style={{color:"var(--text)", fontWeight:700, fontSize:13, marginBottom:4}}>{title}</div>
                 {code
                   ? <div style={{display:"flex", gap:10, alignItems:"center"}}>
-                      <code style={{color:G, fontSize:11, fontFamily:"monospace", background:"var(--bg)", padding:"4px 10px", borderRadius:5, flex:1}}>{detail}</code>
+                      <code style={{color:G, fontSize:11, fontFamily:"var(--font-mono)", background:"var(--bg)", padding:"4px 10px", borderRadius:5, flex:1}}>{detail}</code>
                       <CopyBtn text={detail} id={`c${step}`}/>
                     </div>
                   : <div style={{color:DIM, fontSize:12}}>{detail}</div>
@@ -6510,7 +6610,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
         (hasResults && (
           <div style={{display:"flex", justifyContent:"flex-end", gap:8, padding:"10px 24px 0"}}>
             <button onClick={()=>setGuide(g=>!g)}
-              style={{background:guide?"#1e3a5f":"var(--surface)",border:`1px solid ${guide?"#3b82f6":"var(--border2)"}`,borderRadius:6,padding:"6px 12px",color:guide?"var(--t-93c5fd, #93c5fd)":"var(--muted)",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              style={{background:guide?"var(--tint-blue)":"var(--surface)",border:`1px solid ${guide?"#3b82f6":"var(--border2)"}`,borderRadius:6,padding:"6px 12px",color:guide?"var(--t-93c5fd, #93c5fd)":"var(--muted)",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               {guide?"Hide Guide":"How to Use"}
             </button>
             <button onClick={() => setShowPDFModal(true)}
@@ -6531,7 +6631,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setGuide(g=>!g)}
-                style={{background:guide?"#1e3a5f":"var(--surface)",border:`1px solid ${guide?"#3b82f6":"var(--border2)"}`,borderRadius:6,padding:"6px 12px",color:guide?"var(--t-93c5fd, #93c5fd)":"var(--muted)",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                style={{background:guide?"var(--tint-blue)":"var(--surface)",border:`1px solid ${guide?"#3b82f6":"var(--border2)"}`,borderRadius:6,padding:"6px 12px",color:guide?"var(--t-93c5fd, #93c5fd)":"var(--muted)",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                 {guide?"Hide Guide":"How to Use"}
               </button>
               {hasResults && (
@@ -6547,11 +6647,11 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
 
       {/* How To Use Guide */}
       {guide && (
-        <div style={{margin:"12px 24px 0",background:"var(--surface2)",border:"1px solid #1e3a5f",borderRadius:8,padding:"14px 16px"}}>
+        <div style={{margin:"12px 24px 0",background:"var(--surface2)",border:"1px solid var(--bd-blue)",borderRadius:8,padding:"14px 16px"}}>
           <div style={{fontSize:12,fontWeight:700,color:"var(--t-93c5fd, #93c5fd)",marginBottom:10}}>How to Run This Module</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
             {attacks.map(atk=>(
-              <div key={atk.id} style={{background:"#0d1f35",borderRadius:6,padding:"10px 12px",border:"1px solid #1e3a5f"}}>
+              <div key={atk.id} style={{background:"var(--surface2)",borderRadius:6,padding:"10px 12px",border:"1px solid var(--bd-blue)"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                   <span style={{fontSize:14}}>{atk.icon}</span>
                   <span style={{fontSize:11,fontWeight:700,color:"var(--heading)"}}>{atk.label}</span>
@@ -6570,7 +6670,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                   </div>
                 )}
                 {atk.hackerImpact && (
-                  <div style={{background:"#1a0505",border:"1px solid #7f1d1d",borderRadius:4,padding:"6px 8px",marginTop:4}}>
+                  <div style={{background:"var(--tint-red)",border:"1px solid var(--bd-red)",borderRadius:4,padding:"6px 8px",marginTop:4}}>
                     <div style={{fontSize:9,color:"var(--t-f87171, #f87171)",fontWeight:700,marginBottom:3}}>Hacker Impact:</div>
                     <div style={{fontSize:9,color:"var(--t-fca5a5, #fca5a5)",lineHeight:1.5}}>{atk.hackerImpact}</div>
                   </div>
@@ -6619,7 +6719,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             const borderCol = res?.error?"#ef4444":hasCrit?"#dc2626":res?"#1e40af":"#1e293b";
             return (
               <div key={atk.id} style={{background:"var(--surface)",border:`1px solid ${borderCol}`,borderRadius:8,overflow:"hidden"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"#0d1526"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"var(--surface2)"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:16}}>{atk.icon}</span>
                     <div>
@@ -6628,7 +6728,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                     </div>
                   </div>
                   <button onClick={()=>run(atk)} disabled={isLoading||!target}
-                    style={{background:isLoading?"var(--border)":color,border:"none",borderRadius:4,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:isLoading||!target?"not-allowed":"pointer",opacity:!target?0.4:1,flexShrink:0}}>
+                    style={{background:isLoading?"var(--border)":color,border:"none",borderRadius:4,padding:"5px 12px",color:"var(--heading)",fontSize:11,fontWeight:700,cursor:isLoading||!target?"not-allowed":"pointer",opacity:!target?0.4:1,flexShrink:0}}>
                     {isLoading?"…":"Run"}
                   </button>
                 </div>
@@ -6640,7 +6740,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                     )}
                     {findings.length>0 && findings.slice(0,12).map((f,i)=>(
                       <div key={i} style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:4,fontSize:11}}>
-                        <span style={{background:sevColor(f.severity),color:"#fff",borderRadius:3,padding:"1px 5px",fontSize:9,fontWeight:700,flexShrink:0,marginTop:1}}>{f.severity||"INFO"}</span>
+                        <span style={{background:sevColor(f.severity),color:"var(--heading)",borderRadius:3,padding:"1px 5px",fontSize:9,fontWeight:700,flexShrink:0,marginTop:1}}>{f.severity||"INFO"}</span>
                         <span style={{color:"var(--text)"}}>{f.title||""}{f.detail?" — "+String(f.detail).slice(0,80):""}</span>
                       </div>
                     ))}
@@ -7566,9 +7666,9 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
   };
   if (!tests || tests.length === 0) return null;
   return (
-    <div style={{background:"var(--surface2)", border:"1px solid #1e3a5f", borderRadius:10, overflow:"hidden"}}>
+    <div style={{background:"var(--surface2)", border:"1px solid var(--bd-blue)", borderRadius:10, overflow:"hidden"}}>
       {!onbDismissed && (
-        <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
+        <div style={{background:"var(--surface)", borderBottom:"1px solid var(--bd-blue)", padding:"14px 16px"}}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
             <div style={{fontSize:13, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)"}}>First time? Here is the 5-step workflow</div>
             <button onClick={dismissOnb} style={{background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:14, padding:0, lineHeight:1}}></button>
@@ -7585,13 +7685,13 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
           )}
         </div>
       )}
-      <div style={{position:"sticky", top:0, zIndex:5, background:"var(--surface2)", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
+      <div style={{position:"sticky", top:0, zIndex:5, background:"var(--surface2)", borderBottom:"1px solid var(--bd-blue)", padding:"14px 16px"}}>
         <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, gap:12}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:14, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)"}}>Manual Tests — {moduleLabel}</div>
             <div style={{fontSize:10, color:"var(--muted)", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " required") : ""} · run locally · paste evidence for the PDF</div>
           </div>
-          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#ef4444", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>Result(pdf)</button>
+          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "var(--tint-blue)" : "#ef4444", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>Result(pdf)</button>
         </div>
         <div style={{height:5, background:"var(--border)", borderRadius:3, overflow:"hidden", marginBottom:8}}>
           <div style={{height:"100%", width:`${pct}%`, background: pct === 100 ? "#22c55e" : "#7c3aed", transition:"width 0.3s"}}/>
@@ -7642,7 +7742,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
                             {(t.tools_required||[]).length > 2 && (<span style={{fontSize:9, color:"var(--dim)"}}>+{(t.tools_required||[]).length-2}</span>)}
                           </div>
                         </div>
-                        {status !== "not_run" && (<span style={{background: statusColor, color:"#fff", padding:"2px 8px", borderRadius:4, fontSize:9, fontWeight:700, textTransform:"uppercase", flexShrink:0}}>{isNA ? "N/A" : (sev === "no-finding" ? "OK" : sev)}</span>)}
+                        {status !== "not_run" && (<span style={{background: statusColor, color:"var(--heading)", padding:"2px 8px", borderRadius:4, fontSize:9, fontWeight:700, textTransform:"uppercase", flexShrink:0}}>{isNA ? "N/A" : (sev === "no-finding" ? "OK" : sev)}</span>)}
                         <span style={{color:"var(--dim)", fontSize:11, flexShrink:0}}>{isOpen ? "▼" : "▶"}</span>
                       </div>
                       {isOpen && (
@@ -7652,7 +7752,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
                               <div style={{fontSize:11, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)", marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>What customer needs</div>
                               <ul style={{margin:0, paddingLeft:16, fontSize:11, color:"var(--text)", lineHeight:1.6}}>{(t.customer_prereqs||[]).map((p,i)=><li key={i}>{p}</li>)}</ul>
                               <div style={{fontSize:11, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)", marginTop:12, marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>Steps</div>
-                              <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"var(--text)", lineHeight:1.6}}>{(t.steps||[]).map((s,i)=>(<li key={i} style={{marginBottom:4}}>{s.startsWith("$") ? (<code style={{background:"var(--bg)", color:"var(--t-4ade80, #4ade80)", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"monospace"}}>{s.slice(1).trim()}</code>) : s}</li>))}</ol>
+                              <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"var(--text)", lineHeight:1.6}}>{(t.steps||[]).map((s,i)=>(<li key={i} style={{marginBottom:4}}>{s.startsWith("$") ? (<code style={{background:"var(--bg)", color:"var(--t-4ade80, #4ade80)", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"var(--font-mono)"}}>{s.slice(1).trim()}</code>) : s}</li>))}</ol>
                             </div>
                             <div>
                               <div style={{fontSize:11, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)", marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>What to look for</div>
@@ -7661,11 +7761,11 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
                                 <div style={{fontSize:11, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)", textTransform:"uppercase", letterSpacing:0.4}}>Your findings</div>
                                 {flashing && <span style={{fontSize:9, color:"var(--t-22c55e, #22c55e)", fontWeight:700}}>saved</span>}
                               </div>
-                              <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})} placeholder="Paste output / screenshot link / describe what happened…" style={{width:"100%", minHeight:90, background:"var(--bg)", color:"var(--text)", border:"1px solid var(--border2)", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
+                              <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})} placeholder="Paste output / screenshot link / describe what happened…" style={{width:"100%", minHeight:90, background:"var(--bg)", color:"var(--text)", border:"1px solid var(--border2)", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"var(--font-mono)", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
                               <div style={{display:"flex", gap:4, marginTop:8, flexWrap:"wrap"}}>
                                 {[["not_run","Not Run","#475569"],["no-finding","OK","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Med","#f59e0b"],["HIGH","High","#ef4444"],["na","N/A","#64748b"]].map(([val,label,c])=>{
                                   const active = (val==="not_run" && status==="not_run") || (val==="na" && status==="na") || (val!=="not_run" && val!=="na" && f.severity===val);
-                                  return (<button key={val} onClick={()=>update(t.id, val==="not_run" ? {status:"not_run", severity:undefined} : val==="na" ? {status:"na", severity:undefined} : {status:"done", severity:val})} style={{background: active?c:"transparent", color: active?"#fff":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>);
+                                  return (<button key={val} onClick={()=>update(t.id, val==="not_run" ? {status:"not_run", severity:undefined} : val==="na" ? {status:"na", severity:undefined} : {status:"done", severity:val})} style={{background: active?c:"transparent", color: active?"var(--heading)":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>);
                                 })}
                               </div>
                               {t.owasp_masvs && (<div style={{marginTop:10, fontSize:10, color:"var(--dim)", paddingTop:8, borderTop:"1px solid var(--border)"}}><span style={{color:"var(--muted)", fontWeight:700}}>Standard:</span> {t.owasp_masvs}</div>)}
@@ -8363,7 +8463,7 @@ function MobileStaticModule({token, apiUrl}) {
       alignItems:"center", gap:12, flexWrap:"wrap",
     }}>
       <label style={{
-        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        background: uploading ? "var(--tint-blue)" : "var(--accent)", color:"#fff",
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
@@ -8394,7 +8494,7 @@ function MobileStaticModule({token, apiUrl}) {
                style={{flex:1, minWidth:240, background:"var(--bg)",
                        border:"1px solid var(--nav-active)", borderRadius:6,
                        padding:"8px 10px", color:"var(--muted)", fontSize:11,
-                       fontFamily:"monospace"}}/>
+                       fontFamily:"var(--font-mono)"}}/>
       )}
       <div style={{color:"var(--text)", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
@@ -8504,7 +8604,7 @@ function MobileStorageModule({token, apiUrl}) {
       alignItems:"center", gap:12, flexWrap:"wrap",
     }}>
       <label style={{
-        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        background: uploading ? "var(--tint-blue)" : "var(--accent)", color:"#fff",
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
@@ -8535,7 +8635,7 @@ function MobileStorageModule({token, apiUrl}) {
                style={{flex:1, minWidth:240, background:"var(--bg)",
                        border:"1px solid var(--nav-active)", borderRadius:6,
                        padding:"8px 10px", color:"var(--muted)", fontSize:11,
-                       fontFamily:"monospace"}}/>
+                       fontFamily:"var(--font-mono)"}}/>
       )}
       <div style={{color:"var(--text)", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
@@ -8644,7 +8744,7 @@ function MobileRuntimeModule({token, apiUrl}) {
       alignItems:"center", gap:12, flexWrap:"wrap",
     }}>
       <label style={{
-        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        background: uploading ? "var(--tint-blue)" : "var(--accent)", color:"#fff",
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
@@ -8673,7 +8773,7 @@ function MobileRuntimeModule({token, apiUrl}) {
                style={{flex:1, minWidth:240, background:"var(--bg)",
                        border:"1px solid var(--nav-active)", borderRadius:6,
                        padding:"8px 10px", color:"var(--muted)", fontSize:11,
-                       fontFamily:"monospace"}}/>
+                       fontFamily:"var(--font-mono)"}}/>
       )}
       <div style={{color:"var(--text)", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
@@ -8774,7 +8874,7 @@ function MobileCryptoModule({token, apiUrl}) {
     <div style={{background:"var(--surface)", border:"1px solid var(--border2)", borderRadius:8,
                  padding:"12px 16px", marginBottom:12, display:"flex",
                  alignItems:"center", gap:12, flexWrap:"wrap"}}>
-      <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+      <label style={{background: uploading ? "var(--tint-blue)" : "var(--accent)", color:"#fff",
                      padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
                      cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
         {uploading ? "Uploading..." : "Upload APK / IPA"}
@@ -8800,7 +8900,7 @@ function MobileCryptoModule({token, apiUrl}) {
                style={{flex:1, minWidth:240, background:"var(--bg)",
                        border:"1px solid var(--nav-active)", borderRadius:6,
                        padding:"8px 10px", color:"var(--muted)", fontSize:11,
-                       fontFamily:"monospace"}}/>
+                       fontFamily:"var(--font-mono)"}}/>
       )}
       <div style={{color:"var(--text)", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
@@ -8901,7 +9001,7 @@ function MobileNetworkModule({token, apiUrl}) {
     <div style={{background:"var(--surface)", border:"1px solid var(--border2)", borderRadius:8,
                  padding:"12px 16px", marginBottom:12, display:"flex",
                  alignItems:"center", gap:12, flexWrap:"wrap"}}>
-      <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+      <label style={{background: uploading ? "var(--tint-blue)" : "var(--accent)", color:"#fff",
                      padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
                      cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
         {uploading ? "Uploading..." : "Upload APK / IPA"}
@@ -8927,7 +9027,7 @@ function MobileNetworkModule({token, apiUrl}) {
                style={{flex:1, minWidth:240, background:"var(--bg)",
                        border:"1px solid var(--nav-active)", borderRadius:6,
                        padding:"8px 10px", color:"var(--muted)", fontSize:11,
-                       fontFamily:"monospace"}}/>
+                       fontFamily:"var(--font-mono)"}}/>
       )}
       <div style={{color:"var(--text)", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
@@ -9050,13 +9150,13 @@ function ReportModule({token, apiUrl}) {
   return (
     <div style={{padding:24,maxWidth:900,margin:"0 auto"}}>
       <div style={{marginBottom:20}}>
-        <h2 style={{color:"var(--text)",margin:0,fontSize:22,fontWeight:800}}>Report Writing</h2>
+        <h2 style={{color:"var(--text)",margin:0,fontSize:22,fontWeight:600}}>Report Writing</h2>
         <p style={{color:"var(--dim)",fontSize:13,marginTop:6}}>Build your penetration test report, add findings, and export a professional PDF.</p>
       </div>
 
       {/* Report metadata */}
       <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:18,marginBottom:16}}>
-        <div style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:1}}>REPORT DETAILS</div>
+        <div style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:0.5}}>REPORT DETAILS</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {[["Report Title",title,setTitle],["Client / Company",client,setClient],["Tester Name",tester,setTester],["Target System",target,setTarget]].map(([lbl,val,set])=>(
             <div key={lbl}>
@@ -9076,7 +9176,7 @@ function ReportModule({token, apiUrl}) {
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {SEVS.map(s=>({ s, n:findings.filter(f=>f.severity===s).length })).map(({s,n})=>(
           <div key={s} style={{background:"var(--surface2)",border:`1px solid ${sev[s]}33`,borderRadius:8,padding:"10px",textAlign:"center"}}>
-            <div style={{fontSize:20,fontWeight:800,color:sev[s]}}>{n}</div>
+            <div style={{fontSize:20,fontWeight:600,color:sev[s]}}>{n}</div>
             <div style={{fontSize:10,color:"var(--muted)",fontWeight:700}}>{s}</div>
           </div>
         ))}
@@ -9085,8 +9185,8 @@ function ReportModule({token, apiUrl}) {
       {/* Findings list */}
       <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:18,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <span style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12,letterSpacing:1}}>FINDINGS ({findings.length})</span>
-          <button onClick={addFinding} style={{background:"#1d4ed8",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Finding</button>
+          <span style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12,letterSpacing:0.5}}>FINDINGS ({findings.length})</span>
+          <button onClick={addFinding} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Finding</button>
         </div>
         {findings.length===0 && <div style={{color:"var(--dim)",fontSize:13,textAlign:"center",padding:"24px 0"}}>No findings yet — click "Add Finding" to start</div>}
         {findings.map((f,i)=>(
@@ -9103,7 +9203,7 @@ function ReportModule({token, apiUrl}) {
             <textarea value={f.desc} onChange={e=>updF(i,"desc",e.target.value)} rows={2} placeholder="Description — what was found, how to reproduce..."
               style={{width:"100%",background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:6,padding:"7px 10px",color:"var(--text)",fontSize:12,outline:"none",resize:"vertical",marginBottom:6,boxSizing:"border-box"}}/>
             <textarea value={f.remediation} onChange={e=>updF(i,"remediation",e.target.value)} rows={1} placeholder="Remediation recommendation..."
-              style={{width:"100%",background:"var(--surface2)",border:"1px solid #14532d",borderRadius:6,padding:"7px 10px",color:"var(--t-86efac, #86efac)",fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+              style={{width:"100%",background:"var(--surface2)",border:"1px solid var(--bd-green)",borderRadius:6,padding:"7px 10px",color:"var(--t-86efac, #86efac)",fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
           </div>
         ))}
       </div>
@@ -9176,7 +9276,7 @@ function ToolManagerModule({token}) {
     <div style={{padding:24,maxWidth:1000,margin:"0 auto"}}>
       <div style={{marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div>
-          <h2 style={{color:"var(--text)",margin:0,fontSize:22,fontWeight:800}}>Tool Manager & Updater</h2>
+          <h2 style={{color:"var(--text)",margin:0,fontSize:22,fontWeight:600}}>Tool Manager & Updater</h2>
           <p style={{color:"var(--dim)",fontSize:13,marginTop:4}}>Update Kali, install/upgrade all pentesting tools including GitHub projects</p>
         </div>
         <button onClick={checkStatus} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:6,padding:"8px 16px",color:"var(--muted)",fontSize:12,cursor:"pointer"}}>
@@ -9205,12 +9305,12 @@ function ToolManagerModule({token}) {
       {/* Tool Status Grid */}
       {Object.keys(status).length > 0 && (
         <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:10,padding:16,marginBottom:16}}>
-          <div style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:1}}>TOOL STATUS</div>
+          <div style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:0.5}}>TOOL STATUS</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:6}}>
             {Object.entries(status).map(([tool,s])=>(
               <div key={tool} style={{display:"flex",alignItems:"center",gap:6,background:"var(--bg)",borderRadius:6,padding:"5px 8px"}}>
                 <div style={{width:7,height:7,borderRadius:"50%",background:sevColor(s),flexShrink:0}}/>
-                <span style={{color:"var(--text)",fontSize:11,fontFamily:"monospace"}}>{tool}</span>
+                <span style={{color:"var(--text)",fontSize:11,fontFamily:"var(--font-mono)"}}>{tool}</span>
               </div>
             ))}
           </div>
@@ -9224,9 +9324,9 @@ function ToolManagerModule({token}) {
             <div style={{color:"var(--t-60a5fa, #60a5fa)",fontSize:11,fontWeight:700,marginBottom:8}}>{cat.cat}</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
               {cat.tools.map(t=>(
-                <span key={t} style={{background:status[t]==="ok"?"#14532d":status[t]==="missing"?"#450a0a":"var(--border)",
+                <span key={t} style={{background:status[t]==="ok"?"var(--tint-green)":status[t]==="missing"?"var(--tint-red)":"var(--border)",
                   color:status[t]==="ok"?"var(--t-86efac, #86efac)":status[t]==="missing"?"var(--t-fca5a5, #fca5a5)":"var(--muted)",
-                  padding:"2px 7px",borderRadius:4,fontSize:10,fontFamily:"monospace"}}>
+                  padding:"2px 7px",borderRadius:4,fontSize:10,fontFamily:"var(--font-mono)"}}>
                   {status[t]==="ok"?"":status[t]==="missing"?"":""}{t}
                 </span>
               ))}
@@ -9242,7 +9342,7 @@ function ToolManagerModule({token}) {
             <span style={{color:"var(--t-60a5fa, #60a5fa)",fontWeight:700,fontSize:12}}>INSTALL LOG</span>
             <button onClick={()=>setLog([])} style={{background:"none",border:"none",color:"var(--dim)",fontSize:11,cursor:"pointer"}}>Clear</button>
           </div>
-          <div style={{maxHeight:300,overflowY:"auto",fontFamily:"monospace",fontSize:11}}>
+          <div style={{maxHeight:300,overflowY:"auto",fontFamily:"var(--font-mono)",fontSize:11}}>
             {log.map((l,i)=>(
               <div key={i} style={{color:l.startsWith("")?"var(--t-ef4444, #ef4444)":l.startsWith("")?"var(--t-22c55e, #22c55e)":l.startsWith("")?"var(--t-60a5fa, #60a5fa)":"var(--muted)",marginBottom:2,lineHeight:1.5}}>{l}</div>
             ))}
@@ -13227,15 +13327,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
   };
 
   const S = {
-    card:    {background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:16,marginBottom:12},
-    label:   {fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4},
-    val:     {fontSize:13,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace"},
-    th:      {background:"#1e293b",padding:"7px 10px",fontSize:11,color:"#94a3b8",fontWeight:700,textAlign:"left"},
-    td:      {padding:"6px 10px",fontSize:12,color:"#e2e8f0",borderBottom:"1px solid #0f172a"},
-    tdMono:  {padding:"6px 10px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace",borderBottom:"1px solid #0f172a"},
+    card:    {background:"var(--surface2)",border:"1px solid var(--bd-blue)",borderRadius:8,padding:16,marginBottom:12},
+    label:   {fontSize:11,color:"var(--dim)",fontWeight:600,marginBottom:4},
+    val:     {fontSize:13,color:"var(--text)",fontFamily:"var(--font-mono)"},
+    th:      {background:"var(--tint-blue)",padding:"7px 10px",fontSize:11,color:"var(--muted)",fontWeight:700,textAlign:"left"},
+    td:      {padding:"6px 10px",fontSize:12,color:"var(--text)",borderBottom:"1px solid var(--bd-blue)"},
+    tdMono:  {padding:"6px 10px",fontSize:11,color:"var(--t-38bdf8, #38bdf8)",fontFamily:"var(--font-mono)",borderBottom:"1px solid var(--bd-blue)"},
     badge:   (c) => ({background:c+"22",color:c,border:"1px solid "+c+"55",borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:700}),
     tabBtn:  (active) => ({background:active?"#1e3a8a":"transparent",border:"none",borderBottom:active?"2px solid #3b82f6":"2px solid transparent",color:active?"#60a5fa":"#64748b",padding:"8px 16px",fontSize:12,fontWeight:active?700:400,cursor:"pointer"}),
-    section: {background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:6,padding:14,marginBottom:10},
+    section: {background:"var(--surface2)",border:"1px solid var(--bd-blue)",borderRadius:6,padding:14,marginBottom:10},
   };
 
   // ── Results renderer ───────────────────────────────────────────
@@ -13267,7 +13367,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   </div>
                   <div style={{fontSize:11,color:"var(--muted)",lineHeight:1.4,marginBottom:6}}>{f.description}</div>
                   {f.evidence && (
-                    <div style={{fontSize:10,color:"var(--muted)",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
+                    <div style={{fontSize:10,color:"var(--muted)",fontFamily:"var(--font-mono)",marginBottom:4}}>
                       <span style={{color:"var(--muted)",fontWeight:700}}>Evidence: </span>{vlEvidenceOrNone(f)}
                     </div>
                   )}
@@ -13348,7 +13448,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             <div style={{fontSize:13,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",marginBottom:10}}>Subdomains ({r.subdomains.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.subdomains.subdomains.slice(0,60).map((s,i)=>(
-                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
+                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"5px 8px",fontSize:11,color:"var(--t-38bdf8, #38bdf8)",fontFamily:"var(--font-mono)"}}>{s}</div>
               ))}
             </div>
           </div>
@@ -13442,7 +13542,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             {Object.entries(r.banner.banners).map(([port,banner],i)=>(
               <div key={i} style={{marginBottom:8}}>
                 <div style={{...S.badge("#8b5cf6"),display:"inline-block",marginBottom:4}}>Port {port}</div>
-                <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"8px 10px",fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#a3e635",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{String(banner).substring(0,200)}</div>
+                <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"8px 10px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--t-a3e635, #a3e635)",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{String(banner).substring(0,200)}</div>
               </div>
             ))}
           </div>
@@ -13454,7 +13554,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             <div style={{fontSize:13,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",marginBottom:10}}>Certificate Transparency — crt.sh ({r.crtsh.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.crtsh.subdomains.slice(0,60).map((s,i)=>(
-                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"5px 8px",fontSize:11,color:"var(--t-a78bfa, #a78bfa)",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
+                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"5px 8px",fontSize:11,color:"var(--t-a78bfa, #a78bfa)",fontFamily:"var(--font-mono)"}}>{s}</div>
               ))}
             </div>
           </div>
@@ -13466,7 +13566,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             <div style={{fontSize:13,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",marginBottom:10}}>Amass — Deep Subdomain Recon ({r.amass.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.amass.subdomains.slice(0,60).map((s,i)=>(
-                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"5px 8px",fontSize:11,color:"var(--t-34d399, #34d399)",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
+                <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,padding:"5px 8px",fontSize:11,color:"var(--t-34d399, #34d399)",fontFamily:"var(--font-mono)"}}>{s}</div>
               ))}
             </div>
           </div>
@@ -13517,7 +13617,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             {(r.cve_match.cves||[]).slice(0,20).map((c,i)=>(
               <div key={i} style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:5,padding:"8px 12px",marginBottom:6}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"var(--t-fca5a5, #fca5a5)",fontWeight:700}}>{c.id}</span>
+                  <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--t-fca5a5, #fca5a5)",fontWeight:700}}>{c.id}</span>
                   <span style={S.badge(c.cvss_severity==="CRITICAL"?"#dc2626":c.cvss_severity==="HIGH"?"#ea580c":c.cvss_severity==="MEDIUM"?"#ca8a04":"#64748b")}>{c.cvss_severity} · CVSS {c.cvss_score ?? "?"}</span>
                 </div>
                 <div style={{fontSize:11,color:"var(--muted)",lineHeight:1.4}}>{String(c.description||"").substring(0,200)}</div>
@@ -13558,7 +13658,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
   return (
     <div className="fade">
       {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#0c1a3d,var(--surface))",border:"1px solid var(--nav-active)",borderRadius:8,padding:20,marginBottom:16}}>
+      <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:8,padding:20,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
           <span style={{fontSize:20}}></span>
           <h2 style={{fontSize:16,fontWeight:700,color:"var(--heading)"}}>Information Gathering & Recon</h2>
@@ -13605,13 +13705,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
               <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Authenticated recon (optional)</span>
               <span style={{fontSize:10,color:"var(--dim)"}}>— lets crawl/gobuster/jsendpoints/params see behind-login URLs</span>
             </div>
-            {authStatus==="ok"   && <span style={{background:"#052e16",color:"var(--t-4ade80, #4ade80)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
-            {authStatus==="fail" && <span style={{background:"#450a0a",color:"var(--t-f87171, #f87171)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
-            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"var(--t-4ade80, #4ade80)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
+            {authStatus==="ok"   && <span style={{background:"var(--tint-green)",color:"var(--t-4ade80, #4ade80)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
+            {authStatus==="fail" && <span style={{background:"var(--tint-red)",color:"var(--t-f87171, #f87171)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
+            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"var(--tint-green)",color:"var(--t-4ade80, #4ade80)",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
           </div>
           {authOpen && (
             <div style={{padding:"12px",borderTop:"1px solid var(--border)",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:10,color:"var(--text)",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid var(--nav-active)"}}>
+              <div style={{fontSize:10,color:"var(--text)",lineHeight:1.6,background:"var(--tint-blue)",padding:"8px 10px",borderRadius:5,border:"1px solid var(--nav-active)"}}>
                 <b style={{color:"var(--t-86efac, #86efac)"}}>Most customers should leave this empty.</b> External recon (WHOIS, DNS, crt.sh, Shodan, OSINT) doesn't need login. Only fill this in if your target has a login system AND you want the crawler / directory enum / secrets scanner to walk behind-login pages.
               </div>
               <div style={{background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"10px 12px"}}>
@@ -13621,15 +13721,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                   <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
                     placeholder="Login URL (e.g. /login)" autoComplete="off"
-                    style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
                     placeholder="Username / email" autoComplete="off"
                     name="vl-recon-login-user" data-form-type="other"
-                    style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
                     type="password" placeholder="Password" autoComplete="new-password"
                     name="vl-recon-login-pass" data-form-type="other"
-                    style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:4,padding:"7px 10px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
                 <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                   <button
@@ -13665,7 +13765,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                       }
                     }}
                     disabled={rAutoLoginBusy}
-                    style={{background:rAutoLoginBusy?"var(--border)":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"var(--dim)":"var(--surface)",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
+                    style={{background:rAutoLoginBusy?"var(--border)":"#22c55e",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"var(--dim)":"var(--surface)",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
                     {rAutoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
                   </button>
                   {rAutoLoginStatus && rAutoLoginStatus.startsWith("ok") && (
@@ -13682,13 +13782,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Session Cookie</div>
                   <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)}
                     placeholder="PHPSESSID=abc123; sid=xyz"
-                    style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
                 <div style={{flex:1,minWidth:240}}>
                   <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
                   <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
                     placeholder="eyJhbGciOiJIUzI1NiJ9..."
-                    style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               </div>
               {(authCookie||authBearer) && (
@@ -13708,14 +13808,14 @@ function ReconModule({token, onRunningChange, activeSections}) {
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
             placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
-            style={{flex:3,minWidth:240,background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:6,padding:"10px 14px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
+            style={{flex:3,minWidth:240,background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:6,padding:"10px 14px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:13,outline:"none"}}/>
           <button onClick={run} disabled={running||!target.trim()}
-            style={{background:running?"var(--border)":"linear-gradient(135deg,#3b82f6,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"var(--dim)":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
+            style={{background:running?"var(--border)":"var(--accent)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"var(--dim)":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
             {running?"Running...":"Start Recon"}
           </button>
           {running && (
             <button onClick={stop} disabled={stopped}
-              style={{background:"linear-gradient(135deg,#dc2626,#991b1b)",border:"none",borderRadius:6,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
+              style={{background:"#dc2626",border:"none",borderRadius:6,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
               ■ Stop
             </button>
           )}
@@ -13724,7 +13824,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
 
       {/* Badge Legend — explains the tile status colors */}
       <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:8,flexWrap:"wrap",marginBottom:10}}>
-        <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+        <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>RESULTS:</span>
         {[
           {label:"DATA",       color:"#4ade80", bg:"#052e16", desc:"Tool returned findings"},
           {label:"EMPTY",      color:"#94a3b8", bg:"#0f172a", desc:"Ran cleanly — no data for this target"},
@@ -13732,7 +13832,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
           {label:"ERROR",      color:"#f87171", bg:"#1c0000", desc:"Tool had a problem"},
         ].map((b,i)=>(
           <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
-            <span style={{background:b.bg,border:`1px solid ${b.color}`,color:b.color,fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:4,letterSpacing:0.5}}>{b.label}</span>
+            <span style={{background:b.bg,border:`1px solid ${b.color}`,color:b.color,fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:4,letterSpacing:0.5}}>{b.label}</span>
             <span style={{fontSize:11,color:"var(--dim)"}}>{b.desc}</span>
           </div>
         ))}
@@ -13752,13 +13852,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
 
       <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:8,padding:14,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <span style={{fontSize:11,fontWeight:700,color:"var(--dim)",letterSpacing:1,textTransform:"uppercase"}}>Select Phases</span>
+          <span style={{fontSize:11,fontWeight:700,color:"var(--dim)",letterSpacing:0.5,textTransform:"uppercase"}}>Select Phases</span>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setSelected(new Set(RECON_PHASES.map((_,i)=>i)))} style={{background:"none",border:"1px solid var(--border)",borderRadius:4,padding:"3px 10px",color:"var(--t-60a5fa, #60a5fa)",fontSize:11,cursor:"pointer"}}>All</button>
             <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid var(--border)",borderRadius:4,padding:"3px 10px",color:"var(--dim)",fontSize:11,cursor:"pointer"}}>None</button>
           </div>
         </div>
-        <div style={{width:"100%",border:"1px solid var(--border)",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
+        <div style={{width:"100%",border:"1px solid var(--border)",borderRadius:6,overflow:"hidden",background:"var(--surface2)"}}>
           {(()=>{
             const _ordered = RECON_PHASES.map((ph,i)=>({ph,i,_sec:SECTION_OF[ph.tool]||99})).filter(o=>!activeSections||activeSections.size===0||activeSections.has(o._sec)).sort((a,b)=>a._sec-b._sec);
             let _lastSec = null;
@@ -13786,7 +13886,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             return (
               <React.Fragment key={i}>
               {_showHeader && (
-                <div style={{padding:"14px 16px 10px",background:"var(--surface)",borderTop:"2px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",letterSpacing:1.5,textTransform:"uppercase",fontFamily:"ui-monospace,SFMono-Regular,monospace"}}>
+                <div style={{padding:"14px 16px 10px",background:"var(--surface)",borderTop:"2px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",letterSpacing:0.5,textTransform:"uppercase",fontFamily:"var(--font-mono)"}}>
                   {_secMeta.label}
                 </div>
               )}
@@ -13804,7 +13904,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 )}
                 <span style={{flex:1,fontSize:13,fontWeight:500,color:"var(--heading)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
                 <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:90,textAlign:"right"}}>{statusLabel}</span>
-                <span style={{fontSize:11,color:isFailed?"var(--t-f87171, #f87171)":itemsCount>0?"var(--t-60a5fa, #60a5fa)":"var(--muted)",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
+                <span style={{fontSize:11,color:isFailed?"var(--t-f87171, #f87171)":itemsCount>0?"var(--t-60a5fa, #60a5fa)":"var(--muted)",fontFamily:"var(--font-mono)",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
                 {isDone && (
                   <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
                     style={{background:expandedTile===i?"var(--nav-active)":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"var(--border)"),borderRadius:4,padding:"3px 12px",color:"var(--muted)",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
@@ -13816,15 +13916,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 <div style={{padding:"14px 18px",background:"var(--surface2)",borderTop:"1px solid var(--border)",borderLeft:`3px solid ${statusCol}`,fontSize:12,lineHeight:1.55,color:"var(--text)"}}>
                   {isFailed ? (
                     <div>
-                      <div style={{fontSize:11,color:"var(--muted)",letterSpacing:1,marginBottom:6,fontWeight:600}}>ERROR REASON</div>
-                      <div style={{color:"var(--t-fca5a5, #fca5a5)",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{String(_failReason).substring(0,300)}</div>
+                      <div style={{fontSize:11,color:"var(--muted)",letterSpacing:0.5,marginBottom:6,fontWeight:600}}>ERROR REASON</div>
+                      <div style={{color:"var(--t-fca5a5, #fca5a5)",fontFamily:"var(--font-mono)",fontSize:11}}>{String(_failReason).substring(0,300)}</div>
                     </div>
                   ) : itemsCount === 0 ? (
                     <div style={{color:"var(--t-86efac, #86efac)"}}>{ph.name} completed. No data discovered for this target.</div>
                   ) : (
                     <div>
-                      <div style={{fontSize:11,color:"var(--muted)",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} ITEM{itemsCount===1?"":"S"} DISCOVERED</div>
-                      <pre style={{margin:0,padding:10,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,fontSize:10,color:"var(--text)",fontFamily:"ui-monospace,SFMono-Regular,monospace",maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap"}}>
+                      <div style={{fontSize:11,color:"var(--muted)",letterSpacing:0.5,marginBottom:8,fontWeight:600}}>{itemsCount} ITEM{itemsCount===1?"":"S"} DISCOVERED</div>
+                      <pre style={{margin:0,padding:10,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:4,fontSize:10,color:"var(--text)",fontFamily:"var(--font-mono)",maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap"}}>
                         {JSON.stringify(res, null, 2).substring(0, 2000)}{JSON.stringify(res).length > 2000 ? "\n\n... (truncated — click row for full results)" : ""}
                       </pre>
                     </div>
@@ -13853,7 +13953,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         <div style={{padding:16}}>
           {/* Live log */}
           {tab==="phases" && (
-            <div ref={logRef} style={{background:"var(--bg)",borderRadius:6,padding:12,height:320,overflowY:"auto",fontFamily:"JetBrains Mono,monospace",fontSize:11}}>
+            <div ref={logRef} style={{background:"var(--bg)",borderRadius:6,padding:12,height:320,overflowY:"auto",fontFamily:"var(--font-mono)",fontSize:11}}>
               {lines.map((l,i)=>{
                 const c = l.startsWith("")?"#f87171":l.startsWith("")?"#4ade80":l.startsWith("[!")?"#fbbf24":"#94a3b8";
                 return <div key={i} style={{color:c,marginBottom:2,lineHeight:1.5}}>{l}</div>;
@@ -18476,13 +18576,13 @@ function ShellPanel({
   const notRunCount  = catalog.length - Object.keys(results).length;
 
   // Styles (shared with the original Exploitation look)
-  const labelStyle = {fontSize: 10, fontWeight: 700, color: "#94a3b8",
-    letterSpacing: 1, marginBottom: 5, display: "block"};
+  const labelStyle = {fontSize: 10, fontWeight: 700, color: "var(--muted)",
+    letterSpacing: 0.5, marginBottom: 5, display: "block"};
   const inputStyle = {width: "100%", padding: "8px 10px",
-    background: "#020617", color: "#e2e8f0", border: "1px solid #1e293b",
-    borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+    background: "var(--surface2)", color: "var(--text)", border: "1px solid var(--bd-blue)",
+    borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 11,
     outline: "none"};
-  const panelStyle = {background: "#0f172a", border: "1px solid #1e293b",
+  const panelStyle = {background: "var(--surface2)", border: "1px solid var(--bd-blue)",
     borderRadius: 10, padding: 16, marginBottom: 14};
   const panelHead  = {fontSize: 11, fontWeight: 800, letterSpacing: 1.5,
     color: "#fca5a5", marginBottom: 12, display: "flex", alignItems: "center", gap: 8};
@@ -18539,14 +18639,14 @@ function ShellPanel({
       <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between",
         marginBottom: 18, gap: 14, flexWrap: "wrap"}}>
         <div>
-          <div style={{fontSize: 22, fontWeight: 900, color: "var(--heading)", lineHeight: 1.1}}>
+          <div style={{fontSize: 22, fontWeight: 600, color: "var(--heading)", lineHeight: 1.1}}>
             {title}
           </div>
           {subtitle && <div style={{fontSize: 11, color: "var(--dim)", marginTop: 4}}>{subtitle}</div>}
         </div>
         {onDownloadReport && (
           <button onClick={downloadReport}
-            style={{padding: "9px 18px", fontSize: 12, fontWeight: 800, letterSpacing: 1,
+            style={{padding: "9px 18px", fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
               background: "#ef4444",
               color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
               boxShadow: "0 4px 12px rgba(239,68,68,0.3)"}}>
@@ -18604,7 +18704,7 @@ function ShellPanel({
                   <div style={{width: 24, height: 24, borderRadius: "50%",
                     background: `linear-gradient(135deg, ${color}, #7f1d1d)`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0}}>
+                    fontSize: 11, fontWeight: 600, color: "#fff", flexShrink: 0}}>
                     {p.n}
                   </div>
                   <div style={{flex: 1, minWidth: 0}}>
@@ -18618,15 +18718,15 @@ function ShellPanel({
 
           {isRunning ? (
             <button onClick={stopRunning}
-              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
-                background: "linear-gradient(135deg, #f59e0b, #b45309)",
+              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+                background: "#f59e0b",
                 color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
                 boxShadow: "0 6px 20px rgba(245,158,11,0.45)"}}>
               STOP
             </button>
           ) : (
             <button onClick={runSelected} disabled={!selected}
-              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
+              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
                 background: `linear-gradient(135deg, ${color}, #991b1b)`,
                 color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
                 boxShadow: `0 6px 20px ${color}55`}}>
@@ -18646,8 +18746,8 @@ function ShellPanel({
               ...(hasInteractiveShell ? [{id: "shell", label: isInteractive ? "Live Shell" : "Extracted Data"}] : []),
             ].map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
-                style={{padding: "10px 18px", fontSize: 11, fontWeight: 800, letterSpacing: 1,
-                  background: activeTab === t.id ? "#2563eb" : "transparent",
+                style={{padding: "10px 18px", fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
+                  background: activeTab === t.id ? "var(--accent)" : "transparent",
                   color: activeTab === t.id ? "#fff" : "var(--muted)",
                   border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer"}}>
                 {t.label}
@@ -18661,7 +18761,7 @@ function ShellPanel({
             {/* LOG */}
             {activeTab === "log" && (
               <div ref={logRef} style={{padding: "18px 22px",
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: 12, minHeight: 340, maxHeight: 520, overflowY: "auto", lineHeight: 1.7}}>
                 {logLines.length === 0 ? (
                   <div style={{color: "var(--dim)", fontStyle: "italic"}}>
@@ -18686,7 +18786,7 @@ function ShellPanel({
                   <>
                     <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 14}}>
                       <span style={{fontSize: 18}}>{r.ok ? "" : ""}</span>
-                      <span style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.5,
+                      <span style={{fontSize: 14, fontWeight: 600, letterSpacing: 0.5,
                         color: r.ok ? "var(--t-4ade80, #4ade80)" : "var(--t-f87171, #f87171)"}}>
                         {r.ok ? "EVIDENCE OF COMPROMISE" : "FAILURE REASON"}
                       </span>
@@ -18706,7 +18806,7 @@ function ShellPanel({
                         background: "rgba(251,191,36,0.10)",
                         border: "1px solid rgba(251,191,36,0.35)",
                         fontSize: 12, color: "var(--t-fde68a, #fde68a)", lineHeight: 1.6}}>
-                        <span style={{color: "var(--t-fbbf24, #fbbf24)", fontWeight: 800, marginRight: 6}}>What to try:</span>
+                        <span style={{color: "var(--t-fbbf24, #fbbf24)", fontWeight: 600, marginRight: 6}}>What to try:</span>
                         {r.suggested_action}
                       </div>
                     )}
@@ -18715,18 +18815,18 @@ function ShellPanel({
                       <div style={{padding: "9px 12px", borderRadius: 8, marginBottom: 14,
                         background: "rgba(59,130,246,0.10)",
                         border: "1px solid rgba(59,130,246,0.35)",
-                        fontSize: 11, color: "#bfdbfe", lineHeight: 1.5}}>
-                        <span style={{color: "var(--t-60a5fa, #60a5fa)", fontWeight: 800, marginRight: 6}}>Auto-recovery:</span>
+                        fontSize: 11, color: "var(--t-bfdbfe, #bfdbfe)", lineHeight: 1.5}}>
+                        <span style={{color: "var(--t-60a5fa, #60a5fa)", fontWeight: 600, marginRight: 6}}>Auto-recovery:</span>
                         We detected a stuck lab container and restarted it automatically before retrying.
                       </div>
                     )}
 
                     {r.payload && (
                       <div style={{marginBottom: 14}}>
-                        <div style={{fontSize: 10, fontWeight: 800, color: "var(--dim)",
-                          letterSpacing: 1.5, marginBottom: 6}}>PAYLOAD</div>
-                        <div style={{padding: "10px 12px", background: "#000",
-                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                        <div style={{fontSize: 10, fontWeight: 600, color: "var(--dim)",
+                          letterSpacing: 0.5, marginBottom: 6}}>PAYLOAD</div>
+                        <div style={{padding: "10px 12px", background: "var(--surface2)",
+                          borderRadius: 6, fontFamily: "var(--font-mono)",
                           fontSize: 11, color: "var(--t-fbbf24, #fbbf24)", wordBreak: "break-all", lineHeight: 1.6}}>
                           {r.payload}
                         </div>
@@ -18735,11 +18835,11 @@ function ShellPanel({
 
                     {r.ok && r.rows && Array.isArray(r.rows) && r.rows.length > 0 && (
                       <div style={{marginBottom: 14}}>
-                        <div style={{fontSize: 10, fontWeight: 800, color: "var(--dim)",
-                          letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED RECORDS ({r.rows.length})</div>
-                        <div style={{background: "#000", borderRadius: 6, padding: "10px 12px",
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-                          color: "#bfdbfe", maxHeight: 240, overflowY: "auto"}}>
+                        <div style={{fontSize: 10, fontWeight: 600, color: "var(--dim)",
+                          letterSpacing: 0.5, marginBottom: 6}}>EXTRACTED RECORDS ({r.rows.length})</div>
+                        <div style={{background: "var(--surface2)", borderRadius: 6, padding: "10px 12px",
+                          fontFamily: "var(--font-mono)", fontSize: 11,
+                          color: "var(--t-bfdbfe, #bfdbfe)", maxHeight: 240, overflowY: "auto"}}>
                           {r.rows.slice(0, 30).map((row, i) => (
                             <div key={i} style={{padding: "3px 0"}}>
                               <span style={{color: "var(--t-86efac, #86efac)"}}>{String(row[0] || "").padEnd(22)}</span>
@@ -18757,10 +18857,10 @@ function ShellPanel({
 
                     {r.ok && r.jwt && (
                       <div style={{marginBottom: 14}}>
-                        <div style={{fontSize: 10, fontWeight: 800, color: "var(--dim)",
-                          letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED JWT</div>
-                        <div style={{padding: "10px 12px", background: "#000",
-                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                        <div style={{fontSize: 10, fontWeight: 600, color: "var(--dim)",
+                          letterSpacing: 0.5, marginBottom: 6}}>EXTRACTED JWT</div>
+                        <div style={{padding: "10px 12px", background: "var(--surface2)",
+                          borderRadius: 6, fontFamily: "var(--font-mono)",
                           fontSize: 11, color: "var(--t-fbbf24, #fbbf24)", wordBreak: "break-all"}}>
                           {r.jwt}
                         </div>
@@ -18775,18 +18875,18 @@ function ShellPanel({
             {activeTab === "shell" && hasInteractiveShell && (
               <div>
                 <div style={{padding: "10px 16px",
-                  background: isInteractive ? "#052e16" : "#0c1c3a",
-                  borderBottom: `1px solid ${isInteractive ? "#14532d" : "var(--nav-active)"}`,
+                  background: isInteractive ? "var(--tint-green)" : "var(--surface2)",
+                  borderBottom: `1px solid ${isInteractive ? "var(--bd-green)" : "var(--nav-active)"}`,
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   flexWrap: "wrap", gap: 8}}>
                   <div style={{display: "flex", alignItems: "center", gap: 10}}>
                     <span style={{fontSize: 14}}>{isInteractive ? "" : ""}</span>
-                    <span style={{fontSize: 12, fontWeight: 800, letterSpacing: 1.2,
+                    <span style={{fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
                       color: isInteractive ? "var(--t-86efac, #86efac)" : "var(--t-93c5fd, #93c5fd)"}}>
                       {activeShell ? (isInteractive ? "LIVE SHELL" : "EXTRACTED DATA") : "SHELL — Waiting for connection…"}
                     </span>
                     {activeShell && (
-                      <span style={{fontSize: 10, color: "var(--muted)", fontFamily: "'JetBrains Mono', monospace"}}>
+                      <span style={{fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-mono)"}}>
                         sid={activeShell.sid} ·
                         <span style={{color: shellStatus === "live" ? "var(--t-4ade80, #4ade80)"
                           : shellStatus === "error" ? "var(--t-f87171, #f87171)" : "var(--t-fbbf24, #fbbf24)"}}>
@@ -18808,16 +18908,16 @@ function ShellPanel({
                     </div>
                   )}
                 </div>
-                <div ref={outRef} style={{padding: "18px 22px", background: "#000",
-                  color: isInteractive ? "var(--t-4ade80, #4ade80)" : "#bfdbfe",
-                  fontFamily: "'JetBrains Mono', Consolas, monospace",
+                <div ref={outRef} style={{padding: "18px 22px", background: "var(--surface2)",
+                  color: isInteractive ? "var(--t-4ade80, #4ade80)" : "var(--t-bfdbfe, #bfdbfe)",
+                  fontFamily: "var(--font-mono)",
                   fontSize: 13, minHeight: 300, maxHeight: 440, overflowY: "auto",
                   whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.65}}>
                   {shellOutput || (activeShell
                     ? (isInteractive ? "Waiting for shell output…\n" : "Loading extracted data…\n")
                     : "Waiting for reverse shell connection…")}
                 </div>
-                <div style={{padding: 12, background: "#050a16",
+                <div style={{padding: 12, background: "var(--surface2)",
                   borderTop: "1px solid var(--border)",
                   display: "flex", gap: 8, alignItems: "center"}}>
                   {isInteractive && activeShell ? (
@@ -18829,7 +18929,7 @@ function ShellPanel({
                         <input type="text"     name="username" tabIndex={-1} autoComplete="username"          defaultValue=""/>
                         <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue=""/>
                       </div>
-                      <span style={{color: "var(--t-4ade80, #4ade80)", fontFamily: "monospace", fontSize: 15, fontWeight: 800}}>$</span>
+                      <span style={{color: "var(--t-4ade80, #4ade80)", fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 600}}>$</span>
                       <input ref={inputRef}
                         value={shellCmd} onChange={ev => setShellCmd(ev.target.value)}
                         onKeyDown={onKeyDown}
@@ -18843,13 +18943,13 @@ function ShellPanel({
                         data-lpignore="true"
                         data-1p-ignore="true"
                         spellCheck={false}
-                        style={{flex: 1, padding: "9px 11px", background: "#000",
-                          color: "var(--t-4ade80, #4ade80)", border: "1px solid #14532d", borderRadius: 5,
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 13, outline: "none"}}/>
+                        style={{flex: 1, padding: "9px 11px", background: "var(--surface2)",
+                          color: "var(--t-4ade80, #4ade80)", border: "1px solid var(--bd-green)", borderRadius: 5,
+                          fontFamily: "var(--font-mono)", fontSize: 13, outline: "none"}}/>
                       <button onClick={sendCmd}
                         style={{padding: "9px 22px",
-                          background: "linear-gradient(135deg, #22c55e, #16a34a)",
-                          color: "#000", fontWeight: 800, letterSpacing: 1.5,
+                          background: "#22c55e",
+                          color: "#000", fontWeight: 600, letterSpacing: 0.5,
                           border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12,
                           boxShadow: "0 2px 8px rgba(34,197,94,0.3)"}}>SEND</button>
                     </>
@@ -19168,7 +19268,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
       {/* Title bar */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"var(--surface)",borderBottom:`1px solid ${C}33`,borderRadius:"10px 10px 0 0",flexShrink:0}}>
         <div style={{width:8,height:8,borderRadius:"50%",background:sid?"#22c55e":"#ef4444"}}/>
-        <span style={{color:C,fontSize:11,fontWeight:700,fontFamily:"monospace",flex:1}}>{title}</span>
+        <span style={{color:C,fontSize:11,fontWeight:700,fontFamily:"var(--font-mono)",flex:1}}>{title}</span>
         {onClose && <button onClick={onClose} style={{background:"none",border:"none",color:"var(--dim)",cursor:"pointer",fontSize:13,padding:"0 4px"}}></button>}
       </div>
 
@@ -19178,7 +19278,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
           {presetCmds.map((cmd,i)=>(
             <div key={i} style={{display:"flex",gap:2}}>
               <button onClick={async()=>{ if(cmd.pre){ await sendCmd(cmd.pre); await new Promise(r=>setTimeout(r,900)); } sendCmd(cmd.cmd); }}
-                style={{background:`${C}11`,border:`1px solid ${C}33`,borderRadius:4,padding:"3px 8px",color:C,fontSize:10,fontFamily:"monospace",cursor:"pointer",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                style={{background:`${C}11`,border:`1px solid ${C}33`,borderRadius:4,padding:"3px 8px",color:C,fontSize:10,fontFamily:"var(--font-mono)",cursor:"pointer",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
                 title={cmd.cmd}>
                 ▶ {cmd.label||cmd.cmd}
               </button>
@@ -19191,14 +19291,14 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
       )}
 
       {/* Output */}
-      <div ref={outRef} style={{flex:1,overflowY:"auto",padding:"8px 10px",fontFamily:"monospace",fontSize:11,color:"var(--muted)",whiteSpace:"pre-wrap",wordBreak:"break-all",lineHeight:1.5}}>
+      <div ref={outRef} style={{flex:1,overflowY:"auto",padding:"8px 10px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--muted)",whiteSpace:"pre-wrap",wordBreak:"break-all",lineHeight:1.5}}>
         {!sid && loading && <span style={{color:"var(--t-60a5fa, #60a5fa)"}}>Starting session...</span>}
         {output || (sid ? <span style={{color:"var(--dim)"}}>$ _</span> : "")}
       </div>
 
       {/* Input */}
       <div style={{display:"flex",gap:0,borderTop:`1px solid var(--border)`,flexShrink:0}}>
-        <span style={{color:C,padding:"6px 8px",fontFamily:"monospace",fontSize:12,background:"var(--surface)",borderRadius:"0 0 0 10px"}}>$</span>
+        <span style={{color:C,padding:"6px 8px",fontFamily:"var(--font-mono)",fontSize:12,background:"var(--surface)",borderRadius:"0 0 0 10px"}}>$</span>
         <input value={input} onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{
             if(e.key==="Enter") sendCmd(input);
@@ -19207,7 +19307,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
             if(e.key==="c"&&e.ctrlKey) sendCmd("\x03");
           }}
           placeholder="type command..."
-          style={{flex:1,background:"var(--surface)",border:"none",color:"var(--text)",fontFamily:"monospace",fontSize:11,padding:"6px 8px",outline:"none"}}/>
+          style={{flex:1,background:"var(--surface)",border:"none",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,padding:"6px 8px",outline:"none"}}/>
         <button onClick={()=>sendCmd(input)}
           style={{background:C+"22",border:"none",padding:"6px 10px",color:C,fontSize:11,cursor:"pointer",borderRadius:"0 0 10px 0",fontWeight:700}}>↵</button>
       </div>
@@ -19317,7 +19417,7 @@ function CloudAttacksModule({token}) {
                 {res.files_found&&res.files_found.length>0&&<div style={{marginBottom:8}}>
                   <div style={{fontSize:11,color:"var(--t-ef4444, #ef4444)",fontWeight:700}}>Files in bucket:</div>
                   {res.files_found.slice(0,10).map((f,i)=>(
-                    <div key={i} style={{fontSize:11,color:"var(--t-fbbf24, #fbbf24)",fontFamily:"monospace"}}>{f}</div>
+                    <div key={i} style={{fontSize:11,color:"var(--t-fbbf24, #fbbf24)",fontFamily:"var(--font-mono)"}}>{f}</div>
                   ))}
                 </div>}
                 {res.findings&&res.findings.map((f,i)=>(
@@ -19373,7 +19473,7 @@ function ModuleWithTabs({moduleKey, moduleLabel, autoCount, manualTests, autoPan
                     borderBottom: `2px solid ${tab === t.id ? accent : "transparent"}`,
                     padding:"10px 18px", color: tab === t.id ? "var(--heading)" : "var(--dim)",
                     fontSize:11, fontWeight:700, cursor:"pointer",
-                    textTransform:"uppercase", letterSpacing:1}}>
+                    textTransform:"uppercase", letterSpacing:0.5}}>
             {t.label}
           </button>
         ))}
@@ -21073,11 +21173,11 @@ const MODULE_TYPE = {
 function ModuleTypeBadge({moduleKey}) {
   const t = MODULE_TYPE[moduleKey] || "VA";
   const cfg = {
-    "VA":  { bg: "#1e3a8a", border: "#3b82f6", color: "#bfdbfe",
+    "VA":  { bg: "var(--tint-blue)", border: "var(--bd-blue)", color: "var(--t-93c5fd, #93c5fd)",
              label: "VA",  tip: "Vulnerability Assessment - passive, safe to run on any target" },
-    "VA+": { bg: "#78350f", border: "#f59e0b", color: "#fde68a",
+    "VA+": { bg: "var(--tint-amber)", border: "var(--bd-amber)", color: "var(--t-fde68a, #fde68a)",
              label: "VA+", tip: "Mostly passive but does light active probing (port scan, banner grab)" },
-    "PT":  { bg: "#7f1d1d", border: "#ef4444", color: "#fecaca",
+    "PT":  { bg: "var(--tint-red)", border: "var(--bd-red)", color: "var(--t-fca5a5, #fca5a5)",
              label: "PT",  tip: "Penetration Testing - actively exploits target. Authorization required." },
   }[t] || {};
   return (
@@ -21085,9 +21185,9 @@ function ModuleTypeBadge({moduleKey}) {
       style={{
         display:"inline-flex", alignItems:"center", gap:4,
         background: cfg.bg, border: `1px solid ${cfg.border}`,
-        borderRadius:4, padding:"2px 8px",
-        color: cfg.color, fontSize:10, fontWeight:800,
-        letterSpacing:1, textTransform:"uppercase",
+        borderRadius:999, padding:"1px 8px",
+        color: cfg.color, fontSize:11, fontWeight:600,
+        letterSpacing:0.5, textTransform:"uppercase",
         cursor:"help",
       }}>
       {cfg.label}
@@ -21963,11 +22063,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const generatePDF = () => setShowPDFModal(true);
 
   return (
-    <div style={{padding:24, color:"var(--heading)"}}>
-      <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:8}}>
-        <span style={{fontSize:28}}>{emoji}</span>
-        <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
+    <div style={{color:"var(--text)"}}>
+      {/* ENTERPRISE-UI-V1: title lives in the page header; this row keeps type + report */}
+      <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:12}}>
         <ModuleTypeBadge moduleKey={moduleKey}/>
+        <span style={{fontSize:13, color:"var(--muted)"}}>{totalTools ? `${totalTools} automated techniques` : ""}</span>
         <button
           onClick={generatePDF}
           disabled={running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)}
@@ -21976,9 +22076,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               ? "Run a scan or complete manual tests first"
               : `Download PDF (${completedCount} auto + ${Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length} manual)`
           }
-          style={{marginLeft:"auto", background: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "var(--border2)" : "#ef4444",
-                  border:"none", borderRadius:6, padding:"10px 14px",
-                  color:"#fff", fontWeight:600, fontSize:13,
+          style={{marginLeft:"auto", background:"var(--surface)",
+                  border:"1px solid var(--border2)", borderRadius:8, padding:"7px 14px",
+                  color:"var(--text)", fontWeight:500, fontSize:13,
+                  opacity: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? 0.5 : 1,
                   cursor: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "not-allowed" : "pointer"}}>
           Result(pdf)
         </button>
@@ -21995,28 +22096,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
           onSelect={(v) => setTarget(v)}/>
       )}
-      <div style={{display:"flex", gap:8, marginBottom:6}}>
-        {!_containerMode && (
-          <input
-            type="text" placeholder={schema.ph} value={target}
-            onChange={e => setTarget(e.target.value)}
-            disabled={running}
-            style={{flex:1, background:"var(--surface)", border:"1px solid var(--border2)",
-                    borderRadius:6, padding:"10px 12px", color:"var(--heading)",
-                    fontSize:13, outline:"none"}}/>
-        )}
-        {_containerMode && (
-          <div style={{flex:1, background:"#0c1424", border:"1px dashed var(--nav-active)",
-                       borderRadius:6, padding:"10px 14px", color:"var(--muted)",
-                       fontSize:12, display:"flex", alignItems:"center", gap:8}}>
-            <span style={{color:"var(--t-60a5fa, #60a5fa)", fontWeight:700, fontSize:10,
-                          textTransform:"uppercase", letterSpacing:1.2}}>Container scan</span>
-            <span>Provide an <b style={{color:"var(--text)"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
-          </div>
-        )}
         <ScanAuthConsent />
         {profileRun && (
-          <div style={{margin:"0 0 10px",padding:"8px 11px",background:profileRun.error?"#1c0a0a":"var(--surface2)",border:"1px solid "+(profileRun.error?"#7f1d1d":"var(--nav-active)"),borderRadius:6,fontSize:11,lineHeight:1.5,color:"var(--text)"}}>
+          <div style={{margin:"0 0 10px",padding:"8px 11px",background:profileRun.error?"var(--surface2)":"var(--surface2)",border:"1px solid "+(profileRun.error?"var(--bd-red)":"var(--nav-active)"),borderRadius:6,fontSize:11,lineHeight:1.5,color:"var(--text)"}}>
             <div><b style={{color:"var(--t-93c5fd, #93c5fd)"}}>Engagement:</b> {(profileRun.profile||{}).profile_name || (profileRun.profile||{}).profile_id}
               {profileRun.profile && profileRun.profile.max_rps ? ` — max ${profileRun.profile.max_rps} req/s, concurrency ${profileRun.profile.max_concurrency}${profileRun.profile.destructive_allowed ? "" : ", destructive tests OFF"}` : ""}
               {profileRun.profile && profileRun.profile.auth ? (profileRun.profile.auth.authenticated ? `, logged in as role ${profileRun.profile.auth.role || "default"}` : ", unauthenticated") : ""}</div>
@@ -22024,16 +22106,35 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             {(profileRun.notes||[]).length > 0 && (
               <details style={{marginTop:4}}>
                 <summary style={{cursor:"pointer",color:"var(--t-fbbf24, #fbbf24)"}}>{profileRun.notes.length} scanner(s) affected by scope/safety enforcement (partial coverage)</summary>
-                {profileRun.notes.map((n,i) => <div key={i} style={{fontFamily:"JetBrains Mono,monospace",fontSize:10,color:"var(--muted)"}}>{n.tool}: {n.note}</div>)}
+                {profileRun.notes.map((n,i) => <div key={i} style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--muted)"}}>{n.tool}: {n.note}</div>)}
               </details>
             )}
+          </div>
+        )}
+      <div style={{display:"flex", gap:8, marginBottom:6}}>
+        {!_containerMode && (
+          <input
+            type="text" placeholder={schema.ph} value={target}
+            onChange={e => setTarget(e.target.value)}
+            disabled={running}
+            style={{flex:1, minWidth:0, background:"var(--surface)", border:"1px solid var(--border2)",
+                    borderRadius:8, padding:"9px 12px", color:"var(--heading)",
+                    fontSize:13, outline:"none", fontFamily:"var(--font-mono)"}}/>
+        )}
+        {_containerMode && (
+          <div style={{flex:1, background:"var(--surface2)", border:"1px dashed var(--nav-active)",
+                       borderRadius:6, padding:"10px 14px", color:"var(--muted)",
+                       fontSize:12, display:"flex", alignItems:"center", gap:8}}>
+            <span style={{color:"var(--t-60a5fa, #60a5fa)", fontWeight:700, fontSize:10,
+                          textTransform:"uppercase", letterSpacing:0.5}}>Container scan</span>
+            <span>Provide an <b style={{color:"var(--text)"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
           </div>
         )}
         <button
           onClick={runAll} disabled={!canRun}
           title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
-          style={{background: running ? "var(--dim)" : (color || "#3b82f6"),
-                  border:"none", borderRadius:6, padding:"10px 18px",
+          style={{background: running ? "var(--dim)" : "var(--accent)", opacity: !canRun && !running ? 0.55 : 1,
+                  border:"none", borderRadius:8, padding:"0 18px", whiteSpace:"nowrap",
                   color:"#fff", fontWeight:600, fontSize:13,
                   cursor: !canRun ? "not-allowed" : "pointer"}}>
           {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
@@ -22050,9 +22151,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               onClick={() => setTarget(ex)}
               disabled={running}
               title={`Use ${ex} as the target (safe public test target)`}
-              style={{background:"#0c1424", border:"1px solid var(--nav-active)", color:"var(--t-93c5fd, #93c5fd)",
+              style={{background:"var(--surface2)", border:"1px solid var(--nav-active)", color:"var(--t-93c5fd, #93c5fd)",
                        borderRadius:12, padding:"3px 10px", fontSize:11,
-                       fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer",
+                       fontFamily:"var(--font-mono)", cursor: running ? "not-allowed" : "pointer",
                        opacity: running ? 0.5 : 1}}>
               {ex}
             </button>
@@ -22073,7 +22174,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           style={{background:"transparent", border:"1px solid var(--border2)",
                   borderRadius:4, padding:"3px 10px", color:"var(--muted)",
                   fontSize:10, cursor:"pointer", fontWeight:600,
-                  textTransform:"uppercase", letterSpacing:1}}>
+                  textTransform:"uppercase", letterSpacing:0.5}}>
           {showAuth ? "▾" : "▸"} Auth headers {authBearer || authCookie ? "(set)" : "(optional)"}
         </button>
         {advancedFields.length > 0 && (
@@ -22081,7 +22182,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             style={{background:"transparent", border:"1px solid var(--border2)",
                     borderRadius:4, padding:"3px 10px", color:"var(--muted)",
                     fontSize:10, cursor:"pointer", fontWeight:600,
-                    textTransform:"uppercase", letterSpacing:1}}>
+                    textTransform:"uppercase", letterSpacing:0.5}}>
             {showAdv ? "▾" : "▸"} Advanced inputs {advFilledCount > 0 ? `(${advFilledCount}/${advancedFields.length} set)` : `(${advancedFields.length} optional)`}
           </button>
         )}
@@ -22093,10 +22194,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               setAdvInputs(prev => ({...prev, ...cleared}));
             }}
             title="Clear all advanced inputs (image_ref, Dockerfile, pod-spec, kubeconfig, repo_url)"
-            style={{background:"transparent", border:"1px solid #7f1d1d",
+            style={{background:"transparent", border:"1px solid var(--bd-red)",
                     borderRadius:4, padding:"3px 10px", color:"var(--t-fca5a5, #fca5a5)",
                     fontSize:10, cursor:"pointer", fontWeight:600,
-                    textTransform:"uppercase", letterSpacing:1}}>
+                    textTransform:"uppercase", letterSpacing:0.5}}>
             Clear ({advFilledCount})
           </button>
         )}
@@ -22111,7 +22212,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
           <div style={{flex:1, minWidth:280}}>
             <label style={{fontSize:10, color:"var(--dim)", fontWeight:600,
-                            textTransform:"uppercase", letterSpacing:1.2,
+                            textTransform:"uppercase", letterSpacing:0.5,
                             display:"block", marginBottom:3}}>
               Authorization: Bearer
             </label>
@@ -22120,11 +22221,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               disabled={running}
               style={{width:"100%", background:"var(--surface)", border:"1px solid var(--border2)",
                       borderRadius:5, padding:"7px 10px", color:"var(--text)",
-                      fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+                      fontSize:11, fontFamily:"var(--font-mono)", outline:"none"}}/>
           </div>
           <div style={{flex:1, minWidth:280}}>
             <label style={{fontSize:10, color:"var(--dim)", fontWeight:600,
-                            textTransform:"uppercase", letterSpacing:1.2,
+                            textTransform:"uppercase", letterSpacing:0.5,
                             display:"block", marginBottom:3}}>
               Cookie (session)
             </label>
@@ -22133,7 +22234,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               disabled={running}
               style={{width:"100%", background:"var(--surface)", border:"1px solid var(--border2)",
                       borderRadius:5, padding:"7px 10px", color:"var(--text)",
-                      fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+                      fontSize:11, fontFamily:"var(--font-mono)", outline:"none"}}/>
           </div>
         </div>
       )}
@@ -22144,10 +22245,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           when the input they need is missing, so users only need to fill
           the inputs relevant to the techniques they care about. */}
       {showAdv && advancedFields.length > 0 && (
-        <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
+        <div style={{marginBottom:14, padding:"12px 14px", background:"var(--surface2)",
                       border:"1px solid var(--border)", borderRadius:6}}>
           <div style={{fontSize:10, color:"var(--dim)", marginBottom:10,
-                        textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>
+                        textTransform:"uppercase", letterSpacing:0.5, fontWeight:700}}>
             Optional inputs — leave blank to skip the probes that need them
             {advancedFields.includes("kubeconfig") && (
               <span style={{color:"var(--t-f59e0b, #f59e0b)", marginLeft:8, textTransform:"none",
@@ -22165,7 +22266,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               return (
                 <div key={k}>
                   <label style={{fontSize:10, color:"var(--muted)", fontWeight:600,
-                                  textTransform:"uppercase", letterSpacing:1.2,
+                                  textTransform:"uppercase", letterSpacing:0.5,
                                   display:"flex", justifyContent:"space-between",
                                   alignItems:"center", marginBottom:4}}>
                     <span>{def.label} <span style={{color:"var(--dim)", fontWeight:400, textTransform:"none", letterSpacing:0}}>· {def.hint}</span></span>
@@ -22173,7 +22274,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       <button onClick={() => setAdvField(k, "")}
                         style={{background:"transparent", border:"1px solid var(--border2)",
                                 color:"var(--dim)", borderRadius:3, padding:"1px 6px",
-                                fontSize:9, cursor:"pointer", letterSpacing:1}}>
+                                fontSize:9, cursor:"pointer", letterSpacing:0.5}}>
                         CLEAR
                       </button>
                     )}
@@ -22183,12 +22284,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       {presets.map((p, i) => (
                         <button key={i} onClick={() => setAdvField(k, p.value)}
                           disabled={running} title={p.desc}
-                          style={{background: val === p.value ? "#1e3a5f" : "var(--surface)",
+                          style={{background: val === p.value ? "var(--tint-blue)" : "var(--surface)",
                                   border: `1px solid ${val === p.value ? "#3b82f6" : "var(--border2)"}`,
                                   borderRadius:4, padding:"3px 8px",
                                   color: val === p.value ? "var(--t-93c5fd, #93c5fd)" : "var(--muted)",
                                   fontSize:10, cursor: running ? "not-allowed" : "pointer",
-                                  fontFamily:"JetBrains Mono, ui-monospace, monospace"}}>
+                                  fontFamily:"var(--font-mono)"}}>
                           {p.label}
                         </button>
                       ))}
@@ -22200,14 +22301,14 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       spellCheck={false}
                       style={{width:"100%", background:"var(--surface)", border:"1px solid var(--border2)",
                               borderRadius:5, padding:"8px 10px", color:"var(--text)",
-                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              fontSize:11, fontFamily:"var(--font-mono)",
                               outline:"none", resize:"vertical", lineHeight:1.5}}/>
                   ) : (
                     <input type="text" value={val} onChange={e => setAdvField(k, e.target.value)}
                       disabled={running} placeholder={def.ph}
                       style={{width:"100%", background:"var(--surface)", border:"1px solid var(--border2)",
                               borderRadius:5, padding:"7px 10px", color:"var(--text)",
-                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              fontSize:11, fontFamily:"var(--font-mono)",
                               outline:"none"}}/>
                   )}
                 </div>
@@ -22223,10 +22324,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           Each scanner in the module reads only the fields it needs;
           irrelevant fields are ignored by scanners that don't use them. */}
       {optionsFields.length > 0 && (
-        <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
-                      border:"1px solid #1e3a5f", borderRadius:6}}>
+        <div style={{marginBottom:14, padding:"12px 14px", background:"var(--surface2)",
+                      border:"1px solid var(--bd-blue)", borderRadius:6}}>
           <div style={{fontSize:10, color:"var(--t-60a5fa, #60a5fa)", marginBottom:10,
-                        textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>
+                        textTransform:"uppercase", letterSpacing:0.5, fontWeight:700}}>
             VL-METHOD inputs — what each scanner tries against the target
             <span style={{color:"var(--dim)", marginLeft:8, textTransform:"none",
                             letterSpacing:0, fontSize:10, fontWeight:500}}>
@@ -22265,7 +22366,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               return (
                 <div key={k}>
                   <label style={{fontSize:10, color:"var(--muted)", fontWeight:600,
-                                  textTransform:"uppercase", letterSpacing:1.2,
+                                  textTransform:"uppercase", letterSpacing:0.5,
                                   display:"block", marginBottom:3}}>
                     {def.label}
                     {def.secret && (
@@ -22298,14 +22399,14 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       spellCheck={false}
                       style={{width:"100%", background:"var(--surface)", border:"1px solid var(--border2)",
                               borderRadius:5, padding:"8px 10px", color:"var(--text)",
-                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              fontSize:11, fontFamily:"var(--font-mono)",
                               outline:"none", resize:"vertical", lineHeight:1.5}}/>
                   ) : (
                     <input type="text" value={val || ""} onChange={e => setOptField(k, e.target.value)}
                       disabled={running} placeholder={def.ph}
                       style={{width:"100%", background:"var(--surface)", border:"1px solid var(--border2)",
                               borderRadius:5, padding:"7px 10px", color:"var(--text)",
-                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              fontSize:11, fontFamily:"var(--font-mono)",
                               outline:"none"}}/>
                   )}
                 </div>
@@ -22382,7 +22483,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       borderBottom: `2px solid ${activeTab === t.id ? (color || "#3b82f6") : "transparent"}`,
                       padding:"8px 16px", color: activeTab === t.id ? "var(--heading)" : "var(--dim)",
                       fontSize:11, fontWeight:700, cursor:"pointer",
-                      textTransform:"uppercase", letterSpacing:1}}>
+                      textTransform:"uppercase", letterSpacing:0.5}}>
               {t.label}
             </button>
           ))}
@@ -22439,7 +22540,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               <button key={s} onClick={() => setSevFilter(active ? null : s)}
                 style={{background: active ? sevColor(s) : "var(--border)",
                         border: `1px solid ${active ? sevColor(s) : "var(--border2)"}`,
-                        borderRadius:4, padding:"4px 10px", color: active ? "#fff" : "var(--text)",
+                        borderRadius:4, padding:"4px 10px", color: active ? "var(--heading)" : "var(--text)",
                         fontSize:10, fontWeight:600, cursor:"pointer",
                         textTransform:"uppercase", letterSpacing:0.5}}>
                 {s} ({n})
@@ -22462,7 +22563,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 style={{background: selectedTiers.size < tiers.length ? color : "var(--border)",
                         border:`1px solid ${selectedTiers.size < tiers.length ? color : "var(--border2)"}`,
                         borderRadius:4, padding:"4px 10px",
-                        color: selectedTiers.size < tiers.length ? "#fff" : "var(--text)",
+                        color: selectedTiers.size < tiers.length ? "var(--heading)" : "var(--text)",
                         fontSize:10, fontWeight:600, cursor:"pointer",
                         textTransform:"uppercase", letterSpacing:0.5}}>
                 Tiers {selectedTiers.size}/{tiers.length} {tierMenuOpen ? "▴" : "▾"}
@@ -22508,7 +22609,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                           }}
                           style={{accentColor: color}}/>
                         <span style={{flex:1, textTransform:"capitalize"}}>{lbl}</span>
-                        <span style={{color:"var(--dim)", fontSize:10, fontFamily:"monospace"}}>
+                        <span style={{color:"var(--dim)", fontSize:10, fontFamily:"var(--font-mono)"}}>
                           {t.count}
                         </span>
                       </label>
@@ -22581,7 +22682,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               <div style={{borderLeft:`3px solid ${tcolor}`,
                             paddingLeft:14, paddingBottom:8, marginBottom:0}}>
                 <div style={{fontSize:11, fontWeight:700, color:tcolor,
-                              textTransform:"uppercase", letterSpacing:1.5}}>
+                              textTransform:"uppercase", letterSpacing:0.5}}>
                   {sectionTitle(tier.id, idx)}
                 </div>
                 <div style={{fontSize:10, color:"var(--dim)", marginTop:2}}>
@@ -22608,8 +22709,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                                   transition:"border-left 0.15s"}}>
                       <span style={{width:9, height:9, borderRadius:"50%",
                                     background:dot(r), flexShrink:0}}></span>
-                      <span style={{color:"var(--dim)", fontSize:11, letterSpacing:-1,
-                                    fontFamily:"monospace", flexShrink:0}}>≡≡</span>
+                      <span style={{color:"var(--dim)", fontSize:11, letterSpacing:-0.5,
+                                    fontFamily:"var(--font-mono)", flexShrink:0}}>≡≡</span>
                       <span style={{flex:1, color:"var(--heading)", fontSize:13, fontWeight:500,
                                     overflow:"hidden", textOverflow:"ellipsis",
                                     whiteSpace:"nowrap"}}>{prettyName(tool)}</span>
@@ -22632,12 +22733,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         </span>
                       )}
                       {r.elapsed && (
-                        <span style={{color:"var(--dim)", fontSize:10, fontFamily:"monospace"}}>
+                        <span style={{color:"var(--dim)", fontSize:10, fontFamily:"var(--font-mono)"}}>
                           {(r.elapsed/1000).toFixed(1)}s
                         </span>
                       )}
                       <span style={{color:statusColor(r), fontSize:10, fontWeight:700,
-                                    textTransform:"uppercase", letterSpacing:1.2,
+                                    textTransform:"uppercase", letterSpacing:0.5,
                                     minWidth:60, textAlign:"right"}}>
                         {statusLabel(r)}
                       </span>
@@ -22657,7 +22758,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                             <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:6}}>
                               <span style={{padding:"2px 8px", borderRadius:3, fontSize:10,
                                             fontWeight:700, background:sevColor(f.severity || r.severity),
-                                            color:"#fff"}}>{f.severity || r.severity}</span>
+                                            color:"var(--heading)"}}>{f.severity || r.severity}</span>
                               {f.cvss && <span style={{color:"var(--muted)", fontSize:11}}>CVSS {f.cvss}</span>}
                               {f.cwe && f.cwe !== "N/A" && <span style={{color:"var(--muted)", fontSize:11}}>{f.cwe}</span>}
                               {f.confidence && <span style={{color:"var(--t-22c55e, #22c55e)", fontSize:10, fontWeight:600}}>{f.confidence}</span>}
@@ -22669,7 +22770,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                             )}
                             {f.evidence_marker && (
                               <div style={{color:"var(--muted)", fontSize:11, marginBottom:6,
-                                            fontFamily:"monospace", background:"var(--surface)",
+                                            fontFamily:"var(--font-mono)", background:"var(--surface)",
                                             padding:"6px 10px", borderRadius:3, wordBreak:"break-word"}}>
                                 {vlEvidenceOrNone(f)}
                               </div>
@@ -22708,7 +22809,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
       )}
       {activeTab === "auto" && !tiers.length && tiersStatus === "failed" && (
-        <div style={{padding:"30px 20px", background:"#1e1b2e", border:"1px solid #5b21b6",
+        <div style={{padding:"30px 20px", background:"var(--surface2)", border:"1px solid #5b21b6",
                       borderRadius:6, marginTop:16}}>
           <div style={{color:"var(--t-fca5a5, #fca5a5)", fontSize:14, fontWeight:600, marginBottom:8}}>
             Could not load technique catalogue
@@ -22729,7 +22830,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 } else { setTiersStatus("failed"); }
               })
               .catch(() => setTiersStatus("failed"));
-          }} style={{padding:"7px 16px", background:color, color:"#fff",
+          }} style={{padding:"7px 16px", background:color, color:"var(--heading)",
                       border:"none", borderRadius:5, fontSize:12, fontWeight:600,
                       cursor:"pointer"}}>
             ⟲ Retry
@@ -22761,7 +22862,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         }).length;
         return (
         <div>
-          <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", border:"1px solid #1e3a5f", borderRadius:8, padding:"14px 16px", marginBottom:14}}>
+          <div style={{background:"var(--surface)", border:"1px solid var(--bd-blue)", borderRadius:8, padding:"14px 16px", marginBottom:14}}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap"}}>
               <div style={{minWidth:0, flex:1}}>
                 <div style={{fontSize:13, fontWeight:700, color:"var(--t-fbbf24, #fbbf24)", marginBottom:4}}>
@@ -22808,11 +22909,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   <div style={{display:"flex", justifyContent:"space-between", alignItems:"start", marginBottom:8, gap:8}}>
                     <div style={{flex:1, minWidth:0}}>
                       <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:4}}>
-                        <span style={{color:"var(--muted)", fontSize:10, fontFamily:"monospace"}}>{test.ref}</span>
+                        <span style={{color:"var(--muted)", fontSize:10, fontFamily:"var(--font-mono)"}}>{test.ref}</span>
                         <span style={{background:diffC+"22", color:diffC, fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, textTransform:"uppercase"}}>{test.difficulty || "medium"}</span>
                         {test.time && <span style={{background:"var(--border)", color:"var(--muted)", fontSize:9, padding:"1px 6px", borderRadius:3}}>{test.time}</span>}
-                        {test.cost && <span style={{background:test.cost === "paid" ? "#7c2d12" : "#0f3a1f", color:test.cost === "paid" ? "var(--t-fb923c, #fb923c)" : "var(--t-22c55e, #22c55e)", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, textTransform:"uppercase"}}>{test.cost}</span>}
-                        {test.required && <span style={{background:"#7c2d12", color:"var(--t-fbbf24, #fbbf24)", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, border:"1px solid #fbbf24"}}>REQUIRED</span>}
+                        {test.cost && <span style={{background:test.cost === "paid" ? "var(--tint-orange)" : "var(--tint-green)", color:test.cost === "paid" ? "var(--t-fb923c, #fb923c)" : "var(--t-22c55e, #22c55e)", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, textTransform:"uppercase"}}>{test.cost}</span>}
+                        {test.required && <span style={{background:"var(--tint-orange)", color:"var(--t-fbbf24, #fbbf24)", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, border:"1px solid #fbbf24"}}>REQUIRED</span>}
                       </div>
                       <div style={{color:"var(--heading)", fontSize:13, fontWeight:600, lineHeight:1.3}}>
                         {test.title}
@@ -22849,7 +22950,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         <div style={{marginBottom:8}}>
                           <div style={{fontSize:9, color:"var(--t-22c55e, #22c55e)", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Tools required</div>
                           <div style={{color:"var(--text)"}}>
-                            {test.tools_required.map((t, i) => <span key={i} style={{display:"inline-block", background:"var(--surface)", padding:"1px 7px", borderRadius:3, marginRight:5, marginBottom:3, color:"var(--t-22c55e, #22c55e)", fontSize:10, fontFamily:"monospace"}}>{t}</span>)}
+                            {test.tools_required.map((t, i) => <span key={i} style={{display:"inline-block", background:"var(--surface)", padding:"1px 7px", borderRadius:3, marginRight:5, marginBottom:3, color:"var(--t-22c55e, #22c55e)", fontSize:10, fontFamily:"var(--font-mono)"}}>{t}</span>)}
                           </div>
                         </div>
                       )}
@@ -22865,12 +22966,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         <div style={{marginBottom:8}}>
                           <div style={{fontSize:9, color:"var(--t-3b82f6, #3b82f6)", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Steps</div>
                           <ol style={{margin:0, paddingLeft:18, color:"var(--text)"}}>
-                            {test.steps.map((s, i) => <li key={i} style={{marginBottom:3, fontFamily: s.startsWith("$") ? "monospace" : "inherit", fontSize: s.startsWith("$") ? 10 : 11}}>{s}</li>)}
+                            {test.steps.map((s, i) => <li key={i} style={{marginBottom:3, fontFamily: s.startsWith("var(--font-ui)") ? "var(--font-mono)" : "var(--font-ui)", fontSize: s.startsWith("$") ? 10 : 11}}>{s}</li>)}
                           </ol>
                         </div>
                       )}
                       {test.owasp_masvs && (
-                        <div style={{borderTop:"1px solid var(--border)", paddingTop:6, marginTop:6, color:"var(--dim)", fontSize:9, fontFamily:"monospace"}}>
+                        <div style={{borderTop:"1px solid var(--border)", paddingTop:6, marginTop:6, color:"var(--dim)", fontSize:9, fontFamily:"var(--font-mono)"}}>
                           <span style={{color:"var(--dim)"}}>Standards:</span> {test.owasp_masvs}
                         </div>
                       )}
@@ -22895,7 +22996,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       rows={3}
                       style={{width:"100%", background:"var(--bg)", border:"1px solid var(--border)",
                               borderRadius:3, padding:"6px 8px", color:"var(--text)", fontSize:10,
-                              fontFamily:"monospace", resize:"vertical", outline:"none"}}/>
+                              fontFamily:"var(--font-mono)", resize:"vertical", outline:"none"}}/>
                   )}
                   {state.updated_at && (
                     <div style={{color:"var(--dim)", fontSize:9, marginTop:6}}>
@@ -23004,7 +23105,7 @@ function SettingsModule() {
         <p style={{fontSize:12,color:"var(--dim)",marginBottom:24}}>Configure your VulnusLab backend connection.</p>
 
         <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"var(--muted)",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>
+          <label style={{fontSize:11,color:"var(--muted)",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>
             Kali Backend API URL
           </label>
           <div style={{display:"flex",gap:8}}>
@@ -23012,10 +23113,10 @@ function SettingsModule() {
               value={apiUrl}
               onChange={e => setApiUrl(e.target.value)}
               placeholder="http://192.168.1.x:8000"
-              style={{flex:1,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:"10px 14px",color:"var(--text)",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}
+              style={{flex:1,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:"10px 14px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:13,outline:"none"}}
             />
             <button onClick={save}
-              style={{background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               {saved ? "Saved " : "Save & Reload"}
             </button>
           </div>
@@ -23029,12 +23130,12 @@ function SettingsModule() {
         <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,padding:16,marginBottom:16}}>
           <div style={{fontSize:12,fontWeight:600,color:"var(--muted)",marginBottom:10}}>Current Connection</div>
           <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
-            <div><div style={{fontSize:10,color:"var(--dim)",marginBottom:3}}>API URL</div><div style={{fontSize:12,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"JetBrains Mono,monospace"}}>{apiUrl}</div></div>
-            <div><div style={{fontSize:10,color:"var(--dim)",marginBottom:3}}>Status</div><div style={{fontSize:12,color:"var(--t-22c55e, #22c55e)",fontFamily:"JetBrains Mono,monospace"}}>Configured</div></div>
+            <div><div style={{fontSize:10,color:"var(--dim)",marginBottom:3}}>API URL</div><div style={{fontSize:12,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"var(--font-mono)"}}>{apiUrl}</div></div>
+            <div><div style={{fontSize:10,color:"var(--dim)",marginBottom:3}}>Status</div><div style={{fontSize:12,color:"var(--t-22c55e, #22c55e)",fontFamily:"var(--font-mono)"}}>Configured</div></div>
           </div>
         </div>
 
-        <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:8,padding:14}}>
+        <div style={{background:"var(--surface2)",border:"1px solid var(--bd-red)",borderRadius:8,padding:14}}>
           <div style={{fontSize:11,color:"#d97706",fontWeight:700,marginBottom:6}}>Important</div>
           <ul style={{fontSize:11,color:"var(--dim)",lineHeight:2,paddingLeft:16}}>
             <li>Only scan systems you own or have written permission to test.</li>
@@ -23131,12 +23232,12 @@ function AdminPanel({ token }) {
   };
 
   return (
-    <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif"}}>
+    <div className="fade" style={{padding:24,fontFamily:"var(--font-ui)"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
         <span style={{fontSize:28}}></span>
         <div>
-          <h2 style={{fontSize:20,fontWeight:800,color:"var(--heading)",margin:0}}>Admin Panel</h2>
+          <h2 style={{fontSize:20,fontWeight:600,color:"var(--heading)",margin:0}}>Admin Panel</h2>
           <p style={{fontSize:12,color:"var(--dim)",margin:0}}>Manage users, subscriptions and access</p>
         </div>
         <button onClick={load} style={{marginLeft:"auto",background:"var(--border)",border:"1px solid var(--border2)",color:"var(--muted)",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>↻ Refresh</button>
@@ -23151,7 +23252,7 @@ function AdminPanel({ token }) {
           {label:"Expired",       val:stats.expired,  color:"#ef4444"},
         ].map((s,i)=>(
           <div key={i} style={{background:"var(--surface)",border:`1px solid ${s.color}30`,borderTop:`3px solid ${s.color}`,borderRadius:10,padding:16}}>
-            <div style={{fontSize:28,fontWeight:800,color:s.color}}>{s.val}</div>
+            <div style={{fontSize:28,fontWeight:600,color:s.color}}>{s.val}</div>
             <div style={{fontSize:12,color:"var(--dim)",fontWeight:600,marginTop:4}}>{s.label}</div>
           </div>
         ))}
@@ -23159,8 +23260,8 @@ function AdminPanel({ token }) {
 
       {/* Message — red on error, green on success */}
       {msg && <div style={{
-        background: msgIsError ? "#450a0a" : "#052e16",
-        border: msgIsError ? "1px solid #991b1b" : "1px solid #166534",
+        background: msgIsError ? "var(--tint-red)" : "var(--tint-green)",
+        border: msgIsError ? "1px solid var(--bd-red)" : "1px solid var(--bd-green)",
         borderRadius:8, padding:"10px 16px",
         color: msgIsError ? "var(--t-fca5a5, #fca5a5)" : "var(--t-4ade80, #4ade80)",
         fontSize:13, marginBottom:16,
@@ -23185,12 +23286,12 @@ function AdminPanel({ token }) {
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                     <span style={{fontSize:15,fontWeight:700,color:"var(--heading)"}}>{u.username}</span>
-                    {u.username==="ADMIN" && <span style={{fontSize:10,color:"var(--t-a78bfa, #a78bfa)",fontWeight:700,background:"#3b0764",padding:"2px 8px",borderRadius:4}}>SUPERADMIN</span>}
+                    {u.username==="ADMIN" && <span style={{fontSize:10,color:"var(--t-a78bfa, #a78bfa)",fontWeight:700,background:"var(--tint-purple)",padding:"2px 8px",borderRadius:4}}>SUPERADMIN</span>}
                     <span style={{fontSize:10,color:"var(--dim)",background:"var(--border)",padding:"2px 8px",borderRadius:4,fontWeight:600}}>{u.plan?.toUpperCase()}</span>
                     <span style={{fontSize:10,color:statusColor(u),fontWeight:700,background:statusColor(u)+"15",padding:"2px 8px",borderRadius:4}}>{statusLabel(u)}</span>
                   </div>
                   <div style={{fontSize:12,color:"var(--dim)"}}>{u.email}</div>
-                  <div style={{fontSize:11,color:"var(--border2)",marginTop:2,fontFamily:"JetBrains Mono,monospace"}}>
+                  <div style={{fontSize:11,color:"var(--border2)",marginTop:2,fontFamily:"var(--font-mono)"}}>
                     Joined: {u.created_at?.slice(0,10)} &nbsp;|&nbsp; Scans: {u.scan_count||0}
                     {u.expires_at && <> &nbsp;|&nbsp; Expires: {u.expires_at?.slice(0,10)}</>}
                   </div>
@@ -23206,7 +23307,7 @@ function AdminPanel({ token }) {
                         {[7,14,30,60,90,180,365].map(d=><option key={d} value={d}>{d} days</option>)}
                       </select>
                       <button onClick={()=>act(`/api/admin/users/${u.username}/extend`,"POST",{days:_ext(u.username),plan:_plan(u.username)})}
-                        style={{background:"#166534",border:"none",color:"var(--t-4ade80, #4ade80)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                        style={{background:"var(--tint-green)",border:"none",color:"var(--t-4ade80, #4ade80)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                         + Extend
                       </button>
                     </div>
@@ -23226,16 +23327,16 @@ function AdminPanel({ token }) {
                     {/* Suspend / Activate / Delete */}
                     {u.status==="active"
                       ? <button onClick={()=>act(`/api/admin/users/${u.username}/suspend`)}
-                          style={{background:"#451a03",border:"none",color:"var(--t-f97316, #f97316)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          style={{background:"var(--tint-orange)",border:"none",color:"var(--t-f97316, #f97316)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                           Suspend
                         </button>
                       : <button onClick={()=>act(`/api/admin/users/${u.username}/activate`)}
-                          style={{background:"#052e16",border:"none",color:"var(--t-22c55e, #22c55e)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          style={{background:"var(--tint-green)",border:"none",color:"var(--t-22c55e, #22c55e)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                           Activate
                         </button>
                     }
                     <button onClick={()=>{ if(window.confirm(`Delete ${u.username}?`)) act(`/api/admin/users/${u.username}`,"DELETE"); }}
-                      style={{background:"#1c0000",border:"1px solid #7f1d1d",color:"var(--t-f87171, #f87171)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                      style={{background:"var(--tint-red)",border:"1px solid var(--bd-red)",color:"var(--t-f87171, #f87171)",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                       Delete
                     </button>
                   </div>
@@ -23313,21 +23414,21 @@ function UserBackupsModule({token}) {
         </p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>SNAPSHOTS</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>SNAPSHOTS</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>{snapshotCount}</div>
           </div>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>ZONE SIZE</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>ZONE SIZE</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>{fmt(zoneSize)}</div>
           </div>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>RETENTION</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>RETENTION</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>10 max</div>
           </div>
         </div>
         <div style={{display:"flex",gap:12,marginBottom:20}}>
           <button onClick={takeSnapshot} disabled={loading}
-            style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
             {loading ? "Working..." : "+ Take Snapshot Now"}
           </button>
           <button onClick={refresh} disabled={loading}
@@ -23336,7 +23437,7 @@ function UserBackupsModule({token}) {
           </button>
         </div>
         {msg && (
-          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "#14532d", color:"#fff",fontSize:14}}>
+          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "var(--tint-green)", color:"#fff",fontSize:14}}>
             {msg.text}
           </div>
         )}
@@ -23352,21 +23453,21 @@ function UserBackupsModule({token}) {
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"var(--border)"}}>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:1}}>NAME</th>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:1}}>CREATED (UTC)</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>SIZE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>ACTIONS</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>NAME</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>CREATED (UTC)</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>SIZE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {snapshots.map(s => (
                   <tr key={s.name} style={{borderTop:"1px solid var(--border)"}}>
-                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{s.name}</td>
+                    <td style={{padding:"10px 16px",fontFamily:"var(--font-mono)",fontSize:13}}>{s.name}</td>
                     <td style={{padding:"10px 16px",fontSize:13,color:"var(--muted)"}}>{s.created_iso}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{fmt(s.size_bytes)}</td>
                     <td style={{padding:"10px 16px",textAlign:"right",whiteSpace:"nowrap"}}>
                       <button onClick={()=>restoreSnapshot(s.name)} disabled={loading}
-                        style={{padding:"6px 12px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",marginRight:6}}>
+                        style={{padding:"6px 12px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",marginRight:6}}>
                         Restore
                       </button>
                       <button onClick={()=>deleteSnapshot(s.name)} disabled={loading}
@@ -23427,23 +23528,23 @@ function AdminVaultModule({token}) {
         </p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>ARCHIVED DAYS</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>ARCHIVED DAYS</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>{status?.archived_days ?? "—"}</div>
           </div>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>VAULT SIZE</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>VAULT SIZE</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>{fmt(status?.total_size_bytes)}</div>
           </div>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>LAST SYNC (UTC)</div>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>LAST SYNC (UTC)</div>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"var(--font-mono)",wordBreak:"break-all"}}>
               {status?.last_sync_iso || "never"}
             </div>
           </div>
         </div>
         <div style={{display:"flex",gap:12,marginBottom:20}}>
           <button onClick={forceSync} disabled={loading}
-            style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
             {loading ? "Syncing..." : "Sync VAULT Now"}
           </button>
           <button onClick={refresh}
@@ -23452,7 +23553,7 @@ function AdminVaultModule({token}) {
           </button>
         </div>
         {msg && (
-          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "#14532d", color:"#fff",fontSize:14}}>
+          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "var(--tint-green)", color:"#fff",fontSize:14}}>
             {msg.text}
           </div>
         )}
@@ -23468,23 +23569,23 @@ function AdminVaultModule({token}) {
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"var(--border)"}}>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:1}}>DATE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>USERS</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>TOOLS</th>
-                  <th style={{padding:"10px 16px",textAlign:"center",fontSize:11,color:"var(--muted)",letterSpacing:1}}>DB</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>ERRORS</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>DATE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>USERS</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>TOOLS</th>
+                  <th style={{padding:"10px 16px",textAlign:"center",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>DB</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>ERRORS</th>
                 </tr>
               </thead>
               <tbody>
                 {days.map(d => (
                   <tr key={d.date} style={{borderTop:"1px solid var(--border)"}}>
-                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{d.date}</td>
+                    <td style={{padding:"10px 16px",fontFamily:"var(--font-mono)",fontSize:13}}>{d.date}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.users?.length ?? 0}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.tools?.length ?? 0}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"center",color:d.manifest?.db?"var(--t-22c55e, #22c55e)":"var(--muted)"}}>
                       {d.manifest?.db ? "" : "—"}
                     </td>
-                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:d.manifest?.errors?.length ? "#dc2626" : "var(--muted)"}}>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:d.manifest?.errors?.length ? "var(--t-dc2626, #dc2626)" : "var(--muted)"}}>
                       {d.manifest?.errors?.length ?? 0}
                     </td>
                   </tr>
@@ -23583,16 +23684,16 @@ function BackupOperationsModule({token}) {
         {/* Stat cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUPS ON DISK</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>BACKUPS ON DISK</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>{data?.count ?? "—"}</div>
           </div>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>TOTAL SIZE</div>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>TOTAL SIZE</div>
             <div style={{fontSize:28,fontWeight:700,color:"var(--t-3b82f6, #3b82f6)"}}>{data?.total_human ?? "—"}</div>
           </div>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:16}}>
-            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUP DIR</div>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
+            <div style={{color:"var(--muted)",fontSize:11,letterSpacing:0.5,marginBottom:6}}>BACKUP DIR</div>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--t-3b82f6, #3b82f6)",fontFamily:"var(--font-mono)",wordBreak:"break-all"}}>
               {data?.backup_dir || "/root/backups"}
             </div>
           </div>
@@ -23611,11 +23712,11 @@ function BackupOperationsModule({token}) {
               finally { setCreating(false); }
             }}
             disabled={creating}
-            style={{padding:"10px 18px",background:creating?"var(--border)":"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:creating?"var(--border)":"#10b981",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
             {creating ? "Processing..." : "Reset to Present (wipe all + take new)"}
           </button>
           <button onClick={takeBackup} disabled={creating}
-            style={{padding:"10px 18px",background:creating?"var(--border)":"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:creating?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:creating?"var(--border)":"var(--accent)",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:creating?"wait":"pointer",fontSize:14}}>
             Take Backup Now
           </button>
           <button onClick={refresh}
@@ -23632,7 +23733,7 @@ function BackupOperationsModule({token}) {
 
         {/* Status message */}
         {msg && (
-          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "#14532d", color:"#fff",fontSize:14}}>
+          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "var(--tint-green)", color:"#fff",fontSize:14}}>
             {msg.text}
           </div>
         )}
@@ -23641,7 +23742,7 @@ function BackupOperationsModule({token}) {
         <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",fontWeight:600,fontSize:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>All Backups</span>
-            <span style={{color:"var(--dim)",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}>
+            <span style={{color:"var(--dim)",fontSize:11,fontFamily:"var(--font-mono)"}}>
               {data?.count || 0} file(s)
             </span>
           </div>
@@ -23655,21 +23756,21 @@ function BackupOperationsModule({token}) {
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"var(--border)"}}>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:1}}>FILE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>SIZE</th>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:1}}>MODIFIED (UTC)</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>ACTIONS</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>FILE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>SIZE</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>MODIFIED (UTC)</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {data.files.map(f => (
                   <tr key={f.name} style={{borderTop:"1px solid var(--border)"}}>
-                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"var(--text)"}}>
+                    <td style={{padding:"10px 16px",fontFamily:"var(--font-mono)",fontSize:12,color:"var(--text)"}}>
                       {f.is_archive && <span style={{marginRight:6}}></span>}
                       {f.name}
                     </td>
-                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"var(--muted)",fontFamily:"JetBrains Mono,monospace"}}>{f.size_human}</td>
-                    <td style={{padding:"10px 16px",fontSize:12,fontFamily:"JetBrains Mono,monospace",color:"var(--dim)"}}>{f.modified_iso.replace("T"," ").substring(0,19)}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"var(--muted)",fontFamily:"var(--font-mono)"}}>{f.size_human}</td>
+                    <td style={{padding:"10px 16px",fontSize:12,fontFamily:"var(--font-mono)",color:"var(--dim)"}}>{f.modified_iso.replace("T"," ").substring(0,19)}</td>
                     <td style={{padding:"10px 16px",textAlign:"right"}}>
                       {f.name.endsWith(".tar.gz") && (
                         <button onClick={()=>inspectOne(f.name)}
@@ -23682,7 +23783,7 @@ function BackupOperationsModule({token}) {
                         Download
                       </button>
                       <button onClick={()=>deleteOne(f.name)}
-                        style={{padding:"5px 12px",background:"#7f1d1d",color:"var(--t-fca5a5, #fca5a5)",border:"1px solid #991b1b",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                        style={{padding:"5px 12px",background:"#7f1d1d",color:"var(--t-fca5a5, #fca5a5)",border:"1px solid var(--bd-red)",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                         Delete
                       </button>
                     </td>
@@ -23709,7 +23810,7 @@ function BackupOperationsModule({token}) {
         <div onClick={()=>setInspectData(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface2)",border:"1px solid var(--nav-active)",borderRadius:14,width:"100%",maxWidth:720,maxHeight:"85vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{color:"var(--text)",fontWeight:700,fontSize:16}}>Inspecting: <span style={{fontFamily:"JetBrains Mono,monospace",color:"var(--t-a78bfa, #a78bfa)"}}>{inspectData.file}</span></div>
+              <div style={{color:"var(--text)",fontWeight:700,fontSize:16}}>Inspecting: <span style={{fontFamily:"var(--font-mono)",color:"var(--t-a78bfa, #a78bfa)"}}>{inspectData.file}</span></div>
               <button onClick={()=>setInspectData(null)} style={{background:"none",border:"none",color:"var(--dim)",fontSize:20,cursor:"pointer"}}></button>
             </div>
             <div style={{color:"var(--muted)",fontSize:12,marginBottom:14}}>
@@ -23718,22 +23819,22 @@ function BackupOperationsModule({token}) {
             <table style={{width:"100%",borderCollapse:"collapse",marginBottom:14}}>
               <thead>
                 <tr style={{background:"var(--border)"}}>
-                  <th style={{padding:"8px 14px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:1}}>PATH</th>
-                  <th style={{padding:"8px 14px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:1}}>FILES</th>
+                  <th style={{padding:"8px 14px",textAlign:"left",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>PATH</th>
+                  <th style={{padding:"8px 14px",textAlign:"right",fontSize:11,color:"var(--muted)",letterSpacing:0.5}}>FILES</th>
                 </tr>
               </thead>
               <tbody>
                 {inspectData.top_level.map(t => (
                   <tr key={t.name} style={{borderTop:"1px solid var(--border)"}}>
-                    <td style={{padding:"7px 14px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"var(--text)"}}>{t.name}</td>
-                    <td style={{padding:"7px 14px",textAlign:"right",fontSize:12,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"JetBrains Mono,monospace"}}>{t.files}</td>
+                    <td style={{padding:"7px 14px",fontFamily:"var(--font-mono)",fontSize:12,color:"var(--text)"}}>{t.name}</td>
+                    <td style={{padding:"7px 14px",textAlign:"right",fontSize:12,color:"var(--t-60a5fa, #60a5fa)",fontFamily:"var(--font-mono)"}}>{t.files}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <details style={{color:"var(--muted)",fontSize:12}}>
               <summary style={{cursor:"pointer",padding:"6px 0",color:"var(--t-60a5fa, #60a5fa)"}}>Show first 50 paths (raw)</summary>
-              <pre style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:12,fontSize:10,lineHeight:1.4,fontFamily:"JetBrains Mono,monospace",color:"var(--text)",maxHeight:240,overflowY:"auto"}}>
+              <pre style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6,padding:12,fontSize:10,lineHeight:1.4,fontFamily:"var(--font-mono)",color:"var(--text)",maxHeight:240,overflowY:"auto"}}>
 {inspectData.first_50_paths.join("\n")}
               </pre>
             </details>
@@ -23828,56 +23929,56 @@ function ApiKeysModule({ token }) {
   const paidAPIs     = APIS.filter(a => a.tier === "paid");
 
   const styles = {
-    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
-    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1e293b" },
-    title: { fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 6 },
-    subtitle: { fontSize: 14, color: "#94a3b8" },
+    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "var(--text)" },
+    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid var(--bd-blue)" },
+    title: { fontSize: 28, fontWeight: 600, color: "var(--heading)", marginBottom: 6 },
+    subtitle: { fontSize: 14, color: "var(--muted)" },
     dateBadge: { display: "inline-block", marginTop: 8, padding: "4px 12px",
-      background: "#1e293b", borderRadius: 6, fontSize: 12, color: "#64748b",
-      fontFamily: "JetBrains Mono, monospace" },
+      background: "var(--tint-blue)", borderRadius: 6, fontSize: 12, color: "var(--dim)",
+      fontFamily: "var(--font-mono)" },
     summary: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16,
       marginBottom: 28 },
-    summaryCard: { background: "#0a0f1e", border: "1px solid #1e293b",
+    summaryCard: { background: "var(--surface2)", border: "1px solid var(--bd-blue)",
       borderRadius: 8, padding: 18 },
-    summaryLabel: { fontSize: 11, color: "#64748b", textTransform: "uppercase",
-      letterSpacing: 1.2, marginBottom: 6, fontWeight: 700 },
-    summaryValue: { fontSize: 22, fontWeight: 800, color: "#f1f5f9" },
-    summarySub: { fontSize: 11, color: "#64748b", marginTop: 4 },
-    sectionTitle: { fontSize: 13, fontWeight: 700, color: "#64748b",
-      textTransform: "uppercase", letterSpacing: 1.4, marginBottom: 14,
+    summaryLabel: { fontSize: 11, color: "var(--dim)", textTransform: "uppercase",
+      letterSpacing: 0.5, marginBottom: 6, fontWeight: 700 },
+    summaryValue: { fontSize: 22, fontWeight: 600, color: "var(--heading)" },
+    summarySub: { fontSize: 11, color: "var(--dim)", marginTop: 4 },
+    sectionTitle: { fontSize: 13, fontWeight: 700, color: "var(--dim)",
+      textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14,
       marginTop: 8, paddingLeft: 4 },
     grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
       gap: 16, marginBottom: 32 },
-    card: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+    card: { background: "var(--surface2)", border: "1px solid var(--bd-blue)", borderRadius: 10,
       padding: 20, display: "flex", flexDirection: "column", gap: 12 },
     cardHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
-    cardName: { fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
-    badgeFree: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
-      background: "rgba(34,197,94,0.15)", color: "#22c55e", letterSpacing: 1,
+    cardName: { fontSize: 16, fontWeight: 700, color: "var(--heading)" },
+    badgeFree: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+      background: "rgba(34,197,94,0.15)", color: "#22c55e", letterSpacing: 0.5,
       border: "1px solid rgba(34,197,94,0.3)" },
-    badgeFreeTier: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
-      background: "rgba(245,158,11,0.15)", color: "#f59e0b", letterSpacing: 1,
+    badgeFreeTier: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+      background: "rgba(245,158,11,0.15)", color: "var(--t-f59e0b, #f59e0b)", letterSpacing: 0.5,
       border: "1px solid rgba(245,158,11,0.3)" },
-    badgePaid: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
-      background: "rgba(239,68,68,0.15)", color: "#ef4444", letterSpacing: 1,
+    badgePaid: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+      background: "rgba(239,68,68,0.15)", color: "var(--t-ef4444, #ef4444)", letterSpacing: 0.5,
       border: "1px solid rgba(239,68,68,0.3)" },
-    cost: { fontSize: 13, fontWeight: 600, color: "#cbd5e1" },
-    desc: { fontSize: 13, color: "#94a3b8", lineHeight: 1.55 },
+    cost: { fontSize: 13, fontWeight: 600, color: "var(--text)" },
+    desc: { fontSize: 13, color: "var(--muted)", lineHeight: 1.55 },
     metaRow: { display: "flex", flexDirection: "column", gap: 6, paddingTop: 8,
-      borderTop: "1px solid #1e293b" },
+      borderTop: "1px solid var(--bd-blue)" },
     metaLine: { display: "flex", gap: 8, alignItems: "flex-start", fontSize: 11.5 },
-    metaLabel: { color: "#475569", minWidth: 65, fontWeight: 600 },
-    metaValue: { color: "#cbd5e1", fontFamily: "JetBrains Mono, monospace", flex: 1, wordBreak: "break-all" },
+    metaLabel: { color: "var(--dim)", minWidth: 65, fontWeight: 600 },
+    metaValue: { color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, wordBreak: "break-all" },
     usedBy: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2 },
-    modChip: { padding: "2px 7px", fontSize: 10, background: "#1e293b",
-      borderRadius: 4, color: "#94a3b8" },
+    modChip: { padding: "2px 7px", fontSize: 10, background: "var(--tint-blue)",
+      borderRadius: 4, color: "var(--muted)" },
     btnRow: { display: "flex", gap: 10, marginTop: 12 },
-    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b82f6",
+    btnPrimary: { flex: 1, padding: "10px 14px", background: "var(--accent)",
       border: "none", borderRadius: 6, color: "#fff", fontSize: 13,
       fontWeight: 600, cursor: "pointer", textAlign: "center",
       textDecoration: "none", display: "inline-block" },
-    btnDisabled: { flex: 1, padding: "10px 14px", background: "#1e293b",
-      border: "none", borderRadius: 6, color: "#475569", fontSize: 13,
+    btnDisabled: { flex: 1, padding: "10px 14px", background: "var(--tint-blue)",
+      border: "none", borderRadius: 6, color: "var(--dim)", fontSize: 13,
       fontWeight: 600, cursor: "default", textAlign: "center" },
   };
 
@@ -24056,9 +24157,9 @@ function ApiKeysModule({ token }) {
           HOW TO ADD A KEY ONCE YOU HAVE IT
         </div>
         <div style={{fontSize: 13, color: "var(--text)", lineHeight: 1.7}}>
-          On the VPS, edit <code style={{background: "var(--surface)", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "var(--t-22c55e, #22c55e)"}}>~/Cyber-project/.env</code> and add the
+          On the VPS, edit <code style={{background: "var(--surface)", padding: "2px 6px", borderRadius: 3, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--t-22c55e, #22c55e)"}}>~/Cyber-project/.env</code> and add the
           line shown in the <strong style={{color:"var(--heading)"}}>ENV VAR</strong> field above.
-          Then restart the backend: <code style={{background: "var(--surface)", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "var(--t-22c55e, #22c55e)"}}>docker compose up -d --force-recreate backend</code>.
+          Then restart the backend: <code style={{background: "var(--surface)", padding: "2px 6px", borderRadius: 3, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--t-22c55e, #22c55e)"}}>docker compose up -d --force-recreate backend</code>.
           Engines pick up the new key automatically. Customer-supplied creds
           (AWS, Azure, AD, K8s) go through a separate Credential Vault (coming next).
         </div>
@@ -24114,56 +24215,56 @@ function CredentialVaultModule({ token }) {
   };
 
   const styles = {
-    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
-    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1e293b" },
-    title: { fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 6 },
-    subtitle: { fontSize: 14, color: "#94a3b8", lineHeight: 1.6 },
-    addBtn: { padding: "10px 18px", background: "#3b82f6", border: "none",
+    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "var(--text)" },
+    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid var(--bd-blue)" },
+    title: { fontSize: 28, fontWeight: 600, color: "var(--heading)", marginBottom: 6 },
+    subtitle: { fontSize: 14, color: "var(--muted)", lineHeight: 1.6 },
+    addBtn: { padding: "10px 18px", background: "var(--accent)", border: "none",
       borderRadius: 6, color: "#fff", fontSize: 14, fontWeight: 600,
       cursor: "pointer", marginTop: 12 },
     grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
       gap: 16, marginTop: 20 },
-    card: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+    card: { background: "var(--surface2)", border: "1px solid var(--bd-blue)", borderRadius: 10,
       padding: 18, display: "flex", flexDirection: "column", gap: 10 },
-    cardName: { fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
+    cardName: { fontSize: 16, fontWeight: 700, color: "var(--heading)" },
     cardType: { display: "inline-block", padding: "3px 10px", borderRadius: 4,
-      background: "rgba(59,130,246,0.15)", color: "#60a5fa", fontSize: 11,
+      background: "rgba(59,130,246,0.15)", color: "var(--t-60a5fa, #60a5fa)", fontSize: 11,
       fontWeight: 700, letterSpacing: 0.5 },
-    cardMasked: { fontSize: 12, fontFamily: "JetBrains Mono, monospace",
-      color: "#94a3b8", background: "#020617", padding: "8px 10px", borderRadius: 4 },
-    cardMeta: { fontSize: 11, color: "#64748b", display: "flex", gap: 16 },
+    cardMasked: { fontSize: 12, fontFamily: "var(--font-mono)",
+      color: "var(--muted)", background: "var(--surface2)", padding: "8px 10px", borderRadius: 4 },
+    cardMeta: { fontSize: 11, color: "var(--dim)", display: "flex", gap: 16 },
     cardActions: { display: "flex", gap: 8, marginTop: 6 },
     btnEdit: { flex: 1, padding: "8px 12px", background: "transparent",
-      border: "1px solid #334155", borderRadius: 5, color: "#94a3b8",
+      border: "1px solid var(--bd-blue)", borderRadius: 5, color: "var(--muted)",
       fontSize: 12, fontWeight: 600, cursor: "pointer" },
     btnDelete: { flex: 1, padding: "8px 12px", background: "transparent",
-      border: "1px solid #7f1d1d", borderRadius: 5, color: "#f87171",
+      border: "1px solid var(--bd-red)", borderRadius: 5, color: "var(--t-f87171, #f87171)",
       fontSize: 12, fontWeight: 600, cursor: "pointer" },
-    empty: { padding: 60, textAlign: "center", color: "#64748b" },
+    empty: { padding: 60, textAlign: "center", color: "var(--dim)" },
     modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-    modal: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+    modal: { background: "var(--surface2)", border: "1px solid var(--bd-blue)", borderRadius: 10,
       padding: 28, maxWidth: 600, width: "92%", maxHeight: "90vh", overflowY: "auto" },
-    modalTitle: { fontSize: 20, fontWeight: 800, color: "#f1f5f9", marginBottom: 8 },
-    formLabel: { fontSize: 12, color: "#94a3b8", fontWeight: 600, marginTop: 14,
+    modalTitle: { fontSize: 20, fontWeight: 600, color: "var(--heading)", marginBottom: 8 },
+    formLabel: { fontSize: 12, color: "var(--muted)", fontWeight: 600, marginTop: 14,
       marginBottom: 4, display: "block" },
-    formInput: { width: "100%", padding: "9px 12px", background: "#020617",
-      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0",
-      fontSize: 13, fontFamily: "inherit" },
-    formTextarea: { width: "100%", padding: "9px 12px", background: "#020617",
-      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0",
-      fontSize: 12, fontFamily: "JetBrains Mono, monospace", minHeight: 100, resize: "vertical" },
-    formSelect: { width: "100%", padding: "9px 12px", background: "#020617",
-      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0", fontSize: 13 },
+    formInput: { width: "100%", padding: "9px 12px", background: "var(--surface2)",
+      border: "1px solid var(--bd-blue)", borderRadius: 5, color: "var(--text)",
+      fontSize: 13, fontFamily: "var(--font-ui)" },
+    formTextarea: { width: "100%", padding: "9px 12px", background: "var(--surface2)",
+      border: "1px solid var(--bd-blue)", borderRadius: 5, color: "var(--text)",
+      fontSize: 12, fontFamily: "var(--font-mono)", minHeight: 100, resize: "vertical" },
+    formSelect: { width: "100%", padding: "9px 12px", background: "var(--surface2)",
+      border: "1px solid var(--bd-blue)", borderRadius: 5, color: "var(--text)", fontSize: 13 },
     modalBtnRow: { display: "flex", gap: 10, marginTop: 22 },
-    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b82f6",
+    btnPrimary: { flex: 1, padding: "10px 14px", background: "var(--accent)",
       border: "none", borderRadius: 6, color: "#fff", fontSize: 13,
       fontWeight: 600, cursor: "pointer" },
     btnSecondary: { flex: 1, padding: "10px 14px", background: "transparent",
-      border: "1px solid #334155", borderRadius: 6, color: "#94a3b8",
+      border: "1px solid var(--bd-blue)", borderRadius: 6, color: "var(--muted)",
       fontSize: 13, fontWeight: 600, cursor: "pointer" },
-    errorBox: { background: "rgba(220,38,38,0.1)", border: "1px solid #7f1d1d",
-      borderRadius: 5, padding: "10px 14px", color: "#fca5a5", fontSize: 13,
+    errorBox: { background: "rgba(220,38,38,0.1)", border: "1px solid var(--bd-red)",
+      borderRadius: 5, padding: "10px 14px", color: "var(--t-fca5a5, #fca5a5)", fontSize: 13,
       marginBottom: 12 },
   };
 
@@ -24641,7 +24742,7 @@ function TargetProfilesModule({token}) {
     background: ok ? "#052e16" : "#2d1000", color: ok ? "#4ade80" : "#fb923c", border: "1px solid " + (ok ? "#166534" : "#9a3412")});
 
   const Msg = () => msg ? (
-    <div style={{padding: "10px 16px", borderRadius: 8, marginBottom: 14, background: msg.type === "error" ? "#7f1d1d" : "#14532d", color: "#fff", fontSize: 13, lineHeight: 1.5}}>{msg.text}</div>
+    <div style={{padding: "10px 16px", borderRadius: 8, marginBottom: 14, background: msg.type === "error" ? "#7f1d1d" : "var(--tint-green)", color: "#fff", fontSize: 13, lineHeight: 1.5}}>{msg.text}</div>
   ) : null;
 
   // ── LIST VIEW ──
@@ -24678,7 +24779,7 @@ function TargetProfilesModule({token}) {
                 <thead>
                   <tr style={{background: "var(--border)"}}>
                     {["PROFILE", "PRIMARY TARGETS", "ROLES", "AUTHORIZATION", "UPDATED", "ACTIONS"].map((h, i) =>
-                      <th key={h} style={{padding: "10px 14px", textAlign: i === 5 ? "right" : "left", fontSize: 11, color: "var(--muted)", letterSpacing: 1}}>{h}</th>)}
+                      <th key={h} style={{padding: "10px 14px", textAlign: i === 5 ? "right" : "left", fontSize: 11, color: "var(--muted)", letterSpacing: 0.5}}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -24691,7 +24792,7 @@ function TargetProfilesModule({token}) {
                           <div style={{fontWeight: 600}}>{p.name}{isAct && <span style={{...pill(true), marginLeft: 8}}>ACTIVE</span>}</div>
                           <div style={{color: "var(--dim)", fontSize: 11}}>{(p.reporting || {}).company_name || ""}</div>
                         </td>
-                        <td style={{padding: "10px 14px", fontSize: 12, color: "var(--text)", fontFamily: "JetBrains Mono,monospace"}}>
+                        <td style={{padding: "10px 14px", fontSize: 12, color: "var(--text)", fontFamily: "var(--font-mono)"}}>
                           {(p.primary_targets || []).slice(0, 3).join(", ")}{(p.primary_targets || []).length > 3 ? ` +${p.primary_targets.length - 3}` : ""}
                         </td>
                         <td style={{padding: "10px 14px", fontSize: 12, color: "var(--text)"}}>
@@ -24788,7 +24889,7 @@ function TargetProfilesModule({token}) {
                 {scopeRes.within_time_window ? "Currently INSIDE the allowed testing window" : "Currently OUTSIDE the allowed testing window — scans would be refused"}
               </div>
               {scopeRes.results.map((x, k) => (
-                <div key={k} style={{display: "flex", gap: 10, fontSize: 12, padding: "4px 0", borderTop: "1px solid var(--border)", fontFamily: "JetBrains Mono,monospace"}}>
+                <div key={k} style={{display: "flex", gap: 10, fontSize: 12, padding: "4px 0", borderTop: "1px solid var(--border)", fontFamily: "var(--font-mono)"}}>
                   <span style={{...pill(x.allowed), minWidth: 62, textAlign: "center"}}>{x.allowed ? "ALLOWED" : "BLOCKED"}</span>
                   <span style={{flex: 1, wordBreak: "break-all"}}>{x.url}</span>
                   <span style={{color: "var(--muted)"}}>{x.category}{x.reason ? " — " + x.reason : ""}</span>
@@ -24833,8 +24934,8 @@ function TargetProfilesModule({token}) {
               </div>
               {t && !t.running && (
                 <div style={{marginTop: 10, padding: "8px 10px", borderRadius: 6, fontSize: 12, lineHeight: 1.5,
-                             background: t.ok && (t.session || {}).authenticated ? "#052e16" : "#1c0a0a",
-                             border: "1px solid " + (t.ok && (t.session || {}).authenticated ? "#166534" : "#7f1d1d")}}>
+                             background: t.ok && (t.session || {}).authenticated ? "var(--tint-green)" : "var(--surface2)",
+                             border: "1px solid " + (t.ok && (t.session || {}).authenticated ? "var(--bd-green)" : "var(--bd-red)")}}>
                   {t.ok
                     ? (t.session && t.session.authenticated
                         ? <>Login OK as <b>{t.session.role}</b> ({t.session.provider}) — {t.session.has_cookie ? "session cookie" : ""}{t.session.has_bearer ? " bearer token" : ""}{(t.session.header_names || []).length ? " headers: " + t.session.header_names.join(", ") : ""}; verified: {String(t.session.verified)}; expires in {t.session.expires_in_sec}s{t.session.detail ? " — " + t.session.detail : ""}</>
@@ -24898,7 +24999,7 @@ function TargetProfilesModule({token}) {
                 {((meta && meta.time_window_days) || _VL_DAYS).map(day => {
                   const on = (d.tw.days || []).includes(day);
                   return <button key={day} onClick={() => upd({tw: {...d.tw, days: on ? d.tw.days.filter(x => x !== day) : [...(d.tw.days || []), day]}})}
-                    style={{padding: "6px 8px", borderRadius: 5, fontSize: 11, cursor: "pointer", border: "1px solid " + (on ? "#1d4ed8" : "var(--border2)"), background: on ? "var(--nav-active)" : "var(--bg)", color: on ? "#fff" : "var(--muted)"}}>{day}</button>;
+                    style={{padding: "6px 8px", borderRadius: 5, fontSize: 11, cursor: "pointer", border: "1px solid " + (on ? "#1d4ed8" : "var(--border2)"), background: on ? "var(--nav-active)" : "var(--bg)", color: on ? "var(--heading)" : "var(--muted)"}}>{day}</button>;
                 })}
               </div></div>
             <div><span style={lbl}>Start (HH:MM)</span><input style={inp} value={d.tw.start} onChange={e => upd({tw: {...d.tw, start: e.target.value}})}/></div>
@@ -24926,7 +25027,7 @@ function TargetProfilesModule({token}) {
         <textarea style={{...inp, minHeight: 90}} value={d.auth.scope_statement} onChange={e => updAuth({scope_statement: e.target.value})}
                   placeholder="Acme Corp authorizes VulnusLab to perform non-destructive security testing of app.acme.com and api.acme.com between …"/>
         <label style={{display: "flex", gap: 10, alignItems: "flex-start", marginTop: 14, cursor: "pointer", fontSize: 13, lineHeight: 1.5,
-                       color: d.auth.ack ? "var(--t-86efac, #86efac)" : "#fdba74", background: d.auth.ack ? "#052e16" : "#1a1206", border: "1px solid " + (d.auth.ack ? "#166534" : "#7c2d12"), borderRadius: 8, padding: "10px 12px"}}>
+                       color: d.auth.ack ? "var(--t-86efac, #86efac)" : "var(--t-fdba74, #fdba74)", background: d.auth.ack ? "var(--tint-green)" : "var(--surface2)", border: "1px solid " + (d.auth.ack ? "var(--bd-green)" : "var(--bd-orange)"), borderRadius: 8, padding: "10px 12px"}}>
           <input type="checkbox" checked={!!d.auth.ack} onChange={e => updAuth({ack: e.target.checked})} style={{marginTop: 3}}/>
           <span><b>I confirm</b> I hold a written authorization signed by the person above, on behalf of the company above, permitting
           the testing described in the scope statement, and that it is in force for the dates given. I understand testing without
@@ -24967,7 +25068,7 @@ function TargetProfilesModule({token}) {
           {STEPS.map((t, i) => (
             <button key={t} onClick={() => setStep(i)}
               style={{padding: "8px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      border: "1px solid " + (i === step ? "#3b82f6" : "var(--border2)"), background: i === step ? "var(--nav-active)" : "var(--surface)", color: i === step ? "#fff" : "var(--muted)"}}>
+                      border: "1px solid " + (i === step ? "#3b82f6" : "var(--border2)"), background: i === step ? "var(--nav-active)" : "var(--surface)", color: i === step ? "var(--heading)" : "var(--muted)"}}>
               {i + 1}. {t}{i === 4 && !d.auth.ack ? " *" : ""}
             </button>
           ))}
@@ -25233,8 +25334,8 @@ export default function App() {
       return (
         <div style={{padding:"60px 24px",maxWidth:720,margin:"0 auto",textAlign:"center"}}>
           <div style={{fontSize:64,marginBottom:16}}>{activeMod.icon}</div>
-          <div style={{display:"inline-block",background:"rgba(139,92,246,0.15)",border:"1px solid rgba(139,92,246,0.4)",color:"var(--t-a78bfa, #a78bfa)",fontSize:11,fontWeight:800,padding:"5px 14px",borderRadius:20,letterSpacing:1.5,marginBottom:20}}>COMING SOON</div>
-          <h1 style={{fontSize:32,fontWeight:800,color:"var(--heading)",marginBottom:14}}>{activeMod.label}</h1>
+          <div style={{display:"inline-block",background:"rgba(139,92,246,0.15)",border:"1px solid rgba(139,92,246,0.4)",color:"var(--t-a78bfa, #a78bfa)",fontSize:11,fontWeight:600,padding:"5px 14px",borderRadius:20,letterSpacing:0.5,marginBottom:20}}>COMING SOON</div>
+          <h1 style={{fontSize:32,fontWeight:600,color:"var(--heading)",marginBottom:14}}>{activeMod.label}</h1>
           <p style={{fontSize:16,color:"var(--muted)",lineHeight:1.7,marginBottom:32}}>
             This module is under active development. The frontend is built but the
             backend tooling integration is not yet complete.
@@ -25247,7 +25348,7 @@ export default function App() {
             </ul>
           </div>
           <a href="mailto:support@vulnuslab.com?subject=Module%20Request%3A%20{encodeURIComponent(activeMod.label)}"
-             style={{display:"inline-block",background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",color:"#fff",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,textDecoration:"none"}}>
+             style={{display:"inline-block",background:"var(--accent)",color:"#fff",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,textDecoration:"none"}}>
             Request {activeMod.label}
           </a>
         </div>
@@ -25457,6 +25558,9 @@ export default function App() {
     settings:"Workspace and scanner preferences.",
     adminpanel:"Users, plans and platform administration.",
     account_security:"API keys, multi-factor authentication and organisation settings.",
+    report:"Build the engagement report, add findings and export a client-ready PDF.",
+    guide:"How to run each module, plus safe lab targets to practise against.",
+    engagements:"Saved targets, scope and authorisation for each engagement.",
   };
   const pageLabel = topic ? topic.label : (SYSTEM_PAGES[active] ? SYSTEM_PAGES[active].label : active);
   const pageDesc  = PAGE_DESC[active] || (
@@ -25492,9 +25596,13 @@ export default function App() {
           <img src={LOGO} alt=""/>
           <span className="vl-brand-name">Vulnus<b>Lab</b></span>
         </div>
-        <div className="vl-pill" title={API || window.location.origin}>
-          <i style={{background: backendOk===null ? "var(--sev-medium)" : backendOk ? "var(--sev-ok)" : "var(--sev-critical)"}}/>
-          {backendOk===null ? "Connecting…" : backendOk ? "Kali backend online" : "Backend offline"}
+        <div className={"vl-kali" + (backendOk===null ? " wait" : backendOk ? "" : " off")} title={API || window.location.origin}
+          role="status" aria-live="polite">
+          <i/>
+          <div>
+            <div className="t">{backendOk===null ? "Connecting to Kali…" : backendOk ? "Kali Linux — LIVE" : "Kali backend offline"}</div>
+            <div className="s">{backendOk===null ? "Checking backend" : backendOk ? "Real tools ready to scan" : "Scans unavailable right now"}</div>
+          </div>
         </div>
 
         <div className="vl-search">
@@ -25577,14 +25685,14 @@ export default function App() {
 
         {/* Grace period banner — trial expired but 3 grace days */}
         {billingInfo && billingInfo.access === "grace" && (
-          <div style={{background:"#1c0a00",borderBottom:"1px solid #78350f",padding:"10px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
+          <div style={{background:"var(--tint-orange)",borderBottom:"1px solid var(--bd-orange)",padding:"10px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
             <span style={{fontSize:18}}></span>
             <div style={{flex:1}}>
               <span style={{fontSize:13,fontWeight:700,color:"var(--t-fb923c, #fb923c)"}}>
                 Your trial has ended. You have {billingInfo.grace_days_remaining} grace day{billingInfo.grace_days_remaining!==1?"s":""} of full access remaining — subscribe now to keep scanning.
               </span>
             </div>
-            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#dc2626,#ea580c)",border:"none",color:"#fff",padding:"7px 18px",borderRadius:6,fontSize:12,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"#dc2626",border:"none",color:"#fff",padding:"7px 18px",borderRadius:6,fontSize:12,fontWeight:600,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
               {upgrading ? "Loading..." : "Subscribe — $199/mo"}
             </button>
           </div>
@@ -25592,13 +25700,13 @@ export default function App() {
 
         {/* Expired banner — trial + grace exhausted, locked out */}
         {billingInfo && billingInfo.access === "expired" && (
-          <div style={{background:"#1c0000",borderBottom:"2px solid #7f1d1d",padding:"14px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
+          <div style={{background:"var(--tint-red)",borderBottom:"2px solid var(--bd-red)",padding:"14px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
             <span style={{fontSize:20}}></span>
             <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:800,color:"var(--t-fca5a5, #fca5a5)"}}>Trial expired</div>
-              <div style={{fontSize:12,color:"#fecaca",marginTop:2}}>Subscribe to VulnusLab Pro to continue running scans. Your past scans are still accessible.</div>
+              <div style={{fontSize:14,fontWeight:600,color:"var(--t-fca5a5, #fca5a5)"}}>Trial expired</div>
+              <div style={{fontSize:12,color:"var(--t-fecaca, #fecaca)",marginTop:2}}>Subscribe to VulnusLab Pro to continue running scans. Your past scans are still accessible.</div>
             </div>
-            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:6,fontSize:13,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap",boxShadow:"0 0 16px #16a34a55"}}>
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"#16a34a",border:"none",color:"#fff",padding:"9px 22px",borderRadius:6,fontSize:13,fontWeight:600,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap",boxShadow:"none"}}>
               {upgrading ? "Loading..." : "Subscribe — $199/mo"}
             </button>
           </div>
@@ -25606,8 +25714,8 @@ export default function App() {
 
         {/* Trial Banner — within trial window */}
         {isTrial && trialInfo && (!billingInfo || billingInfo.access === "trial") && (
-          <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : ((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2 ? "#1c0a00" : "#0c1a0c"),
-            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2?"#78350f":"#166534")}`,
+          <div style={{background: trialInfo.scans_remaining===0 ? "var(--tint-red)" : ((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2 ? "var(--tint-orange)" : "var(--surface2)"),
+            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"var(--bd-red)":((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2?"var(--bd-orange)":"var(--bd-green)")}`,
             padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
             <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"":((billingInfo ? billingInfo.trial_days_remaining : trialInfo.days_remaining)<=2?"":"")}</span>
             <div style={{flex:1}}>
@@ -25624,7 +25732,7 @@ export default function App() {
                   border:"1px solid var(--border2)"}}/>
               ))}
             </div>
-            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#1e40af,#3b82f6)",border:"none",color:"#fff",
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"#1e40af",border:"none",color:"#fff",
               padding:"5px 14px",borderRadius:6,fontSize:11,fontWeight:700,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
               {upgrading ? "..." : "Upgrade to Pro"}
             </button>
