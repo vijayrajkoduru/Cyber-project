@@ -289,3 +289,118 @@
 @media (max-width:1000px){ .vl-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .vl-grid2{ grid-template-columns:1fr; } .vl-quick{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:480px){ .vl-kpi .v{ font-size:24px; } .vl-quick{ grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce){ .vl-sidebar{ animation:none; } }
+
+/* ===== MERGE: enterprise-ui module restyle (scripts/theme_codemod.py + theme_pass2.py) =====
+   Semantic names used by the restyled module pages, aliased onto the --vl-* palette
+   above so both systems follow the same Light/Dark toggle (.vl-shell / .vl-shell.vl-light). */
+.vl-shell{
+  --bg:var(--vl-020617); --surface:var(--vl-0a0f1e); --surface2:var(--vl-0f172a);
+  --border:var(--vl-1e293b); --border2:var(--vl-334155);
+  --text:var(--vl-e2e8f0); --muted:var(--vl-94a3b8); --dim:var(--vl-64748b); --heading:var(--vl-f1f5f9);
+  --accent:var(--vl-accent); --accent-text:var(--vl-accent-t); --nav-active:var(--vl-navon);
+  --accent-soft:color-mix(in srgb,var(--vl-accent) 12%,transparent);
+  --hover:rgba(255,255,255,.04);
+  --sev-critical:#ef4444; --sev-high:#f97316; --sev-medium:#eab308; --sev-low:#3b82f6; --sev-ok:#22c55e;
+  --font-ui:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  /* translucent status tints + borders — readable in both themes */
+  --tint-red:rgba(239,68,68,.12); --tint-orange:rgba(249,115,22,.12); --tint-amber:rgba(234,179,8,.12);
+  --tint-green:rgba(34,197,94,.12); --tint-cyan:rgba(6,182,212,.12); --tint-blue:rgba(59,130,246,.12);
+  --tint-purple:rgba(168,85,247,.12); --tint-pink:rgba(236,72,153,.12);
+  --bd-red:rgba(239,68,68,.35); --bd-orange:rgba(249,115,22,.35); --bd-amber:rgba(234,179,8,.35);
+  --bd-green:rgba(34,197,94,.35); --bd-cyan:rgba(6,182,212,.35); --bd-blue:rgba(59,130,246,.35);
+  --bd-purple:rgba(168,85,247,.35); --bd-pink:rgba(236,72,153,.35);
+}
+/* light mode: darker variants of bright accent TEXT colours (dark mode uses the inline fallback) */
+.vl-shell.vl-light{
+  --hover:rgba(17,24,39,.04);
+  --t-60a5fa:#1d4ed8; --t-93c5fd:#1d4ed8; --t-3b82f6:#2563eb; --t-bfdbfe:#1d4ed8; --t-38bdf8:#0369a1;
+  --t-4ade80:#15803d; --t-86efac:#15803d; --t-22c55e:#15803d; --t-34d399:#047857; --t-10b981:#047857; --t-bbf7d0:#15803d; --t-a3e635:#4d7c0f;
+  --t-f87171:#b91c1c; --t-fca5a5:#b91c1c; --t-ef4444:#dc2626; --t-dc2626:#b91c1c; --t-fecaca:#b91c1c;
+  --t-fbbf24:#a16207; --t-fde68a:#92400e; --t-f59e0b:#b45309; --t-eab308:#a16207;
+  --t-fb923c:#c2410c; --t-f97316:#c2410c; --t-fdba74:#c2410c;
+  --t-a78bfa:#6d28d9; --t-c084fc:#7e22ce; --t-8b5cf6:#6d28d9; --t-a855f7:#7e22ce; --t-7c3aed:#5b21b6;
+  --t-22d3ee:#0e7490; --t-06b6d4:#0e7490; --t-f472b6:#be185d; --t-ec4899:#be185d;
+}
+
+/* sidebar: big logo + prominent green "Kali Linux — LIVE" badge */
+.vl-brand-name{ font-size:18px; font-weight:800; letter-spacing:2px; line-height:1.1; color:var(--vl-f1f5f9); text-transform:uppercase; }
+.vl-brand-name b{ color:var(--vl-accent); font-weight:800; }
+.vl-kali{ display:flex; align-items:center; gap:10px; margin-top:12px; padding:10px 12px; border-radius:8px;
+  border:1px solid var(--bd-green); background:var(--tint-green); }
+.vl-kali.off{ border-color:var(--bd-red); background:var(--tint-red); }
+.vl-kali.wait{ border-color:var(--bd-amber); background:var(--tint-amber); }
+.vl-kali i{ width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0; background:#22c55e;
+  box-shadow:0 0 0 3px rgba(34,197,94,.25); animation:vlKaliPulse 2s infinite; }
+.vl-kali.off i{ background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.25); }
+.vl-kali.wait i{ background:#eab308; box-shadow:0 0 0 3px rgba(234,179,8,.25); }
+.vl-kali .t{ font-size:14px; font-weight:700; line-height:1.2; color:#4ade80; }
+.vl-kali.off .t{ color:#f87171; } .vl-kali.wait .t{ color:#facc15; }
+.vl-light .vl-kali .t{ color:#16a34a; } .vl-light .vl-kali.off .t{ color:#dc2626; } .vl-light .vl-kali.wait .t{ color:#ca8a04; }
+.vl-kali .s{ font-size:11px; color:var(--vl-94a3b8); line-height:1.3; margin-top:1px; }
+@keyframes vlKaliPulse{ 0%,100%{opacity:1} 50%{opacity:.45} }
+@media (prefers-reduced-motion:reduce){ .vl-kali i{ animation:none; } }
+
+/* Light-mode safety net for data-driven inline colours (scripts/theme_light_net.py) */
+/* LIGHT-NET:BEGIN */
+  .vl-light [style^="background: rgb(2, 6, 23)"],.vl-light [style*="; background: rgb(2, 6, 23)"],.vl-light [style^="background-color: rgb(2, 6, 23)"],.vl-light [style*="; background-color: rgb(2, 6, 23)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(2, 6, 23)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(5, 46, 22)"],.vl-light [style*="; background: rgb(5, 46, 22)"],.vl-light [style^="background-color: rgb(5, 46, 22)"],.vl-light [style*="; background-color: rgb(5, 46, 22)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(5, 46, 22)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(10, 18, 36)"],.vl-light [style*="; background: rgb(10, 18, 36)"],.vl-light [style^="background-color: rgb(10, 18, 36)"],.vl-light [style*="; background-color: rgb(10, 18, 36)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(10, 18, 36)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(10, 22, 40)"],.vl-light [style*="; background: rgb(10, 22, 40)"],.vl-light [style^="background-color: rgb(10, 22, 40)"],.vl-light [style*="; background-color: rgb(10, 22, 40)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(10, 22, 40)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(15, 23, 42)"],.vl-light [style*="; background: rgb(15, 23, 42)"],.vl-light [style^="background-color: rgb(15, 23, 42)"],.vl-light [style*="; background-color: rgb(15, 23, 42)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(15, 23, 42)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(17, 28, 51)"],.vl-light [style*="; background: rgb(17, 28, 51)"],.vl-light [style^="background-color: rgb(17, 28, 51)"],.vl-light [style*="; background-color: rgb(17, 28, 51)"]{background:var(--surface2)!important}
+  .vl-light [style*="solid rgb(17, 28, 51)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="background: rgb(21, 128, 61)"],.vl-light [style*="; background: rgb(21, 128, 61)"],.vl-light [style^="background-color: rgb(21, 128, 61)"],.vl-light [style*="; background-color: rgb(21, 128, 61)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(21, 128, 61)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(22, 101, 52)"],.vl-light [style*="; background: rgb(22, 101, 52)"],.vl-light [style^="background-color: rgb(22, 101, 52)"],.vl-light [style*="; background-color: rgb(22, 101, 52)"]{background:rgba(34,197,94,.10)!important}
+  .vl-light [style*="solid rgb(22, 101, 52)"]{border-color:rgba(34,197,94,.35)!important}
+  .vl-light [style^="background: rgb(28, 0, 0)"],.vl-light [style*="; background: rgb(28, 0, 0)"],.vl-light [style^="background-color: rgb(28, 0, 0)"],.vl-light [style*="; background-color: rgb(28, 0, 0)"]{background:rgba(239,68,68,.10)!important}
+  .vl-light [style*="solid rgb(28, 0, 0)"]{border-color:rgba(239,68,68,.35)!important}
+  .vl-light [style^="background: rgb(28, 10, 0)"],.vl-light [style*="; background: rgb(28, 10, 0)"],.vl-light [style^="background-color: rgb(28, 10, 0)"],.vl-light [style*="; background-color: rgb(28, 10, 0)"]{background:rgba(249,115,22,.10)!important}
+  .vl-light [style*="solid rgb(28, 10, 0)"]{border-color:rgba(249,115,22,.35)!important}
+  .vl-light [style^="background: rgb(28, 21, 0)"],.vl-light [style*="; background: rgb(28, 21, 0)"],.vl-light [style^="background-color: rgb(28, 21, 0)"],.vl-light [style*="; background-color: rgb(28, 21, 0)"]{background:rgba(234,179,8,.10)!important}
+  .vl-light [style*="solid rgb(28, 21, 0)"]{border-color:rgba(234,179,8,.35)!important}
+  .vl-light [style^="background: rgb(30, 41, 59)"],.vl-light [style*="; background: rgb(30, 41, 59)"],.vl-light [style^="background-color: rgb(30, 41, 59)"],.vl-light [style*="; background-color: rgb(30, 41, 59)"]{background:rgba(59,130,246,.10)!important}
+  .vl-light [style*="solid rgb(30, 41, 59)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="color: rgb(34, 211, 238)"],.vl-light [style*="; color: rgb(34, 211, 238)"]{color:#1292a5!important}
+  .vl-light [style^="background: rgb(45, 16, 0)"],.vl-light [style*="; background: rgb(45, 16, 0)"],.vl-light [style^="background-color: rgb(45, 16, 0)"],.vl-light [style*="; background-color: rgb(45, 16, 0)"]{background:rgba(249,115,22,.10)!important}
+  .vl-light [style*="solid rgb(45, 16, 0)"]{border-color:rgba(249,115,22,.35)!important}
+  .vl-light [style^="background: rgb(51, 65, 85)"],.vl-light [style*="; background: rgb(51, 65, 85)"],.vl-light [style^="background-color: rgb(51, 65, 85)"],.vl-light [style*="; background-color: rgb(51, 65, 85)"]{background:rgba(59,130,246,.10)!important}
+  .vl-light [style*="solid rgb(51, 65, 85)"]{border-color:rgba(59,130,246,.35)!important}
+  .vl-light [style^="color: rgb(52, 211, 153)"],.vl-light [style*="; color: rgb(52, 211, 153)"]{color:#21976c!important}
+  .vl-light [style^="color: rgb(56, 189, 248)"],.vl-light [style*="; color: rgb(56, 189, 248)"]{color:#1278a5!important}
+  .vl-light [style^="color: rgb(59, 130, 246)"],.vl-light [style*="; color: rgb(59, 130, 246)"]{color:#124aa5!important}
+  .vl-light [style^="color: rgb(74, 222, 128)"],.vl-light [style*="; color: rgb(74, 222, 128)"]{color:#1c9b4b!important}
+  .vl-light [style^="color: rgb(96, 165, 250)"],.vl-light [style*="; color: rgb(96, 165, 250)"]{color:#1254a5!important}
+  .vl-light [style^="color: rgb(124, 58, 237)"],.vl-light [style*="; color: rgb(124, 58, 237)"]{color:#4912a5!important}
+  .vl-light [style^="color: rgb(134, 239, 172)"],.vl-light [style*="; color: rgb(134, 239, 172)"]{color:#15a248!important}
+  .vl-light [style^="color: rgb(139, 92, 246)"],.vl-light [style*="; color: rgb(139, 92, 246)"]{color:#3f12a5!important}
+  .vl-light [style^="color: rgb(147, 51, 234)"],.vl-light [style*="; color: rgb(147, 51, 234)"]{color:#5f12a5!important}
+  .vl-light [style^="color: rgb(147, 197, 253)"],.vl-light [style*="; color: rgb(147, 197, 253)"]{color:#1258a5!important}
+  .vl-light [style^="color: rgb(163, 230, 53)"],.vl-light [style*="; color: rgb(163, 230, 53)"]{color:#6da314!important}
+  .vl-light [style^="color: rgb(167, 139, 250)"],.vl-light [style*="; color: rgb(167, 139, 250)"]{color:#3712a5!important}
+  .vl-light [style^="color: rgb(168, 85, 247)"],.vl-light [style*="; color: rgb(168, 85, 247)"]{color:#5e12a5!important}
+  .vl-light [style^="color: rgb(187, 247, 208)"],.vl-light [style*="; color: rgb(187, 247, 208)"]{color:#13a446!important}
+  .vl-light [style^="color: rgb(191, 219, 254)"],.vl-light [style*="; color: rgb(191, 219, 254)"]{color:#1254a5!important}
+  .vl-light [style^="color: rgb(219, 39, 119)"],.vl-light [style*="; color: rgb(219, 39, 119)"]{color:#9d1a55!important}
+  .vl-light [style^="color: rgb(220, 38, 38)"],.vl-light [style*="; color: rgb(220, 38, 38)"]{color:#9e1919!important}
+  .vl-light [style^="color: rgb(236, 72, 153)"],.vl-light [style*="; color: rgb(236, 72, 153)"]{color:#a5125b!important}
+  .vl-light [style^="color: rgb(239, 68, 68)"],.vl-light [style*="; color: rgb(239, 68, 68)"]{color:#a51212!important}
+  .vl-light [style^="color: rgb(244, 63, 94)"],.vl-light [style*="; color: rgb(244, 63, 94)"]{color:#a5122c!important}
+  .vl-light [style^="color: rgb(244, 114, 182)"],.vl-light [style*="; color: rgb(244, 114, 182)"]{color:#a5125f!important}
+  .vl-light [style^="color: rgb(245, 158, 11)"],.vl-light [style*="; color: rgb(245, 158, 11)"]{color:#a56f12!important}
+  .vl-light [style^="color: rgb(248, 113, 113)"],.vl-light [style*="; color: rgb(248, 113, 113)"]{color:#a51212!important}
+  .vl-light [style^="color: rgb(249, 115, 22)"],.vl-light [style*="; color: rgb(249, 115, 22)"]{color:#a54f12!important}
+  .vl-light [style^="color: rgb(250, 204, 21)"],.vl-light [style*="; color: rgb(250, 204, 21)"]{color:#a58812!important}
+  .vl-light [style^="color: rgb(251, 146, 60)"],.vl-light [style*="; color: rgb(251, 146, 60)"]{color:#a55412!important}
+  .vl-light [style^="color: rgb(251, 191, 36)"],.vl-light [style*="; color: rgb(251, 191, 36)"]{color:#a57c12!important}
+  .vl-light [style^="color: rgb(252, 165, 165)"],.vl-light [style*="; color: rgb(252, 165, 165)"]{color:#a51212!important}
+  .vl-light [style^="color: rgb(253, 186, 116)"],.vl-light [style*="; color: rgb(253, 186, 116)"]{color:#a55d12!important}
+  .vl-light [style^="color: rgb(253, 230, 138)"],.vl-light [style*="; color: rgb(253, 230, 138)"]{color:#a58812!important}
+  .vl-light [style^="color: rgb(254, 202, 202)"],.vl-light [style*="; color: rgb(254, 202, 202)"]{color:#a51212!important}
+  /* LIGHT-NET:END */
