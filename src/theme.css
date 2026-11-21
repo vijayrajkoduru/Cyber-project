@@ -1,0 +1,291 @@
+/* VulnusLab theme variables.
+   :root keeps the original colours (used by the landing page).
+   .vl-shell = enterprise dark (logged-in app); .vl-shell.vl-light = light theme. */
+:root{
+  --vl-020617:#020617;
+  --vl-0a0f1e:#0a0f1e;
+  --vl-0a0f1c:#0a0f1c;
+  --vl-0a1224:#0a1224;
+  --vl-0b1324:#0b1324;
+  --vl-0b1222:#0b1222;
+  --vl-0a1628:#0a1628;
+  --vl-0f172a:#0f172a;
+  --vl-0c1a3d:#0c1a3d;
+  --vl-1e293b:#1e293b;
+  --vl-334155:#334155;
+  --vl-374151:#374151;
+  --vl-475569:#475569;
+  --vl-64748b:#64748b;
+  --vl-94a3b8:#94a3b8;
+  --vl-cbd5e1:#cbd5e1;
+  --vl-e2e8f0:#e2e8f0;
+  --vl-f1f5f9:#f1f5f9;
+  --vl-f8fafc:#f8fafc;
+  --vl-1e3a8a:#1e3a8a;
+  --vl-1e3a5f:#1e3a5f;
+  --vl-052e16:#052e16;
+  --vl-14532d:#14532d;
+  --vl-166534:#166534;
+  --vl-7f1d1d:#7f1d1d;
+  --vl-991b1b:#991b1b;
+  --vl-1c0000:#1c0000;
+  --vl-1c0a0a:#1c0a0a;
+  --vl-450a0a:#450a0a;
+  --vl-1c0a00:#1c0a00;
+  --vl-78350f:#78350f;
+  --vl-7c2d12:#7c2d12;
+  --vl-60a5fa:#60a5fa;
+  --vl-93c5fd:#93c5fd;
+  --vl-bfdbfe:#bfdbfe;
+  --vl-4ade80:#4ade80;
+  --vl-86efac:#86efac;
+  --vl-f87171:#f87171;
+  --vl-fca5a5:#fca5a5;
+  --vl-fecaca:#fecaca;
+  --vl-fbbf24:#fbbf24;
+  --vl-fde68a:#fde68a;
+  --vl-fb923c:#fb923c;
+  --vl-fdba74:#fdba74;
+  --vl-a78bfa:#a78bfa;
+  --vl-1a1206:#1a1206;
+  --vl-0a1020:#0a1020;
+  --vl-070b16:#070b16;
+  --vl-06091a:#06091a;
+  --vl-451a03:#451a03;
+  --vl-0d1f35:#0d1f35;
+  --vl-1a0505:#1a0505;
+  --vl-0d1526:#0d1526;
+  --vl-0c1c3a:#0c1c3a;
+  --vl-050a16:#050a16;
+  --vl-0c1424:#0c1424;
+  --vl-0b1220:#0b1220;
+  --vl-1e1b2e:#1e1b2e;
+  --vl-0f3a1f:#0f3a1f;
+  --vl-0c1a0c:#0c1a0c;
+  --vl-111c33:#111c33;
+}
+.vl-shell{
+  --vl-020617:#0b1120;
+  --vl-0a0f1e:#111827;
+  --vl-0a0f1c:#0f172a;
+  --vl-0a1224:#0f172a;
+  --vl-0b1324:#0f172a;
+  --vl-0b1222:#0f172a;
+  --vl-0a1628:#0f172a;
+  --vl-0f172a:#111827;
+  --vl-0c1a3d:#172554;
+  --vl-1e293b:#1f2937;
+  --vl-334155:#374151;
+  --vl-374151:#374151;
+  --vl-475569:#6b7280;
+  --vl-64748b:#6b7280;
+  --vl-94a3b8:#9ca3af;
+  --vl-cbd5e1:#d1d5db;
+  --vl-e2e8f0:#e5e7eb;
+  --vl-f1f5f9:#f3f4f6;
+  --vl-f8fafc:#f9fafb;
+  --vl-1e3a8a:#1c2d4f;
+  --vl-1e3a5f:#1e3a5f;
+  --vl-052e16:#052e16;
+  --vl-14532d:#14532d;
+  --vl-166534:#166534;
+  --vl-7f1d1d:#7f1d1d;
+  --vl-991b1b:#991b1b;
+  --vl-1c0000:#1c0000;
+  --vl-1c0a0a:#1c0a0a;
+  --vl-450a0a:#450a0a;
+  --vl-1c0a00:#1c0a00;
+  --vl-78350f:#78350f;
+  --vl-7c2d12:#7c2d12;
+  --vl-60a5fa:#60a5fa;
+  --vl-93c5fd:#93c5fd;
+  --vl-bfdbfe:#bfdbfe;
+  --vl-4ade80:#4ade80;
+  --vl-86efac:#86efac;
+  --vl-f87171:#f87171;
+  --vl-fca5a5:#fca5a5;
+  --vl-fecaca:#fecaca;
+  --vl-fbbf24:#fbbf24;
+  --vl-fde68a:#fde68a;
+  --vl-fb923c:#fb923c;
+  --vl-fdba74:#fdba74;
+  --vl-a78bfa:#a78bfa;
+  --vl-1a1206:#1a1206;
+  --vl-0a1020:#0a1020;
+  --vl-070b16:#070b16;
+  --vl-06091a:#06091a;
+  --vl-451a03:#451a03;
+  --vl-0d1f35:#0d1f35;
+  --vl-1a0505:#1a0505;
+  --vl-0d1526:#0d1526;
+  --vl-0c1c3a:#0c1c3a;
+  --vl-050a16:#050a16;
+  --vl-0c1424:#0c1424;
+  --vl-0b1220:#0b1220;
+  --vl-1e1b2e:#1e1b2e;
+  --vl-0f3a1f:#0f3a1f;
+  --vl-0c1a0c:#0c1a0c;
+  --vl-111c33:#111c33;
+}
+.vl-shell.vl-light{
+  --vl-020617:#f5f6f8;
+  --vl-0a0f1e:#ffffff;
+  --vl-0a0f1c:#f9fafb;
+  --vl-0a1224:#f9fafb;
+  --vl-0b1324:#f9fafb;
+  --vl-0b1222:#f9fafb;
+  --vl-0a1628:#f9fafb;
+  --vl-0f172a:#ffffff;
+  --vl-0c1a3d:#eff6ff;
+  --vl-1e293b:#e5e7eb;
+  --vl-334155:#d1d5db;
+  --vl-374151:#d1d5db;
+  --vl-475569:#6b7280;
+  --vl-64748b:#6b7280;
+  --vl-94a3b8:#4b5563;
+  --vl-cbd5e1:#374151;
+  --vl-e2e8f0:#1f2937;
+  --vl-f1f5f9:#111827;
+  --vl-f8fafc:#111827;
+  --vl-1e3a8a:#dbeafe;
+  --vl-1e3a5f:#dbeafe;
+  --vl-052e16:#dcfce7;
+  --vl-14532d:#bbf7d0;
+  --vl-166534:#86efac;
+  --vl-7f1d1d:#fca5a5;
+  --vl-991b1b:#fca5a5;
+  --vl-1c0000:#fee2e2;
+  --vl-1c0a0a:#fee2e2;
+  --vl-450a0a:#fee2e2;
+  --vl-1c0a00:#ffedd5;
+  --vl-78350f:#fdba74;
+  --vl-7c2d12:#fed7aa;
+  --vl-60a5fa:#2563eb;
+  --vl-93c5fd:#1d4ed8;
+  --vl-bfdbfe:#1e40af;
+  --vl-4ade80:#16a34a;
+  --vl-86efac:#15803d;
+  --vl-f87171:#dc2626;
+  --vl-fca5a5:#b91c1c;
+  --vl-fecaca:#991b1b;
+  --vl-fbbf24:#b45309;
+  --vl-fde68a:#92400e;
+  --vl-fb923c:#c2410c;
+  --vl-fdba74:#9a3412;
+  --vl-a78bfa:#6d28d9;
+  --vl-1a1206:#fff7ed;
+  --vl-0a1020:#edf2ff;
+  --vl-070b16:#eef2ff;
+  --vl-06091a:#ebeeff;
+  --vl-451a03:#ffefe7;
+  --vl-0d1f35:#ecf4ff;
+  --vl-1a0505:#ffeaea;
+  --vl-0d1526:#eef4ff;
+  --vl-0c1c3a:#ebf2ff;
+  --vl-050a16:#ebf1ff;
+  --vl-0c1424:#eef4ff;
+  --vl-0b1220:#eef4ff;
+  --vl-1e1b2e:#f6f4ff;
+  --vl-0f3a1f:#ecfff3;
+  --vl-0c1a0c:#f1fff1;
+  --vl-111c33:#eef4ff;
+  --vl-1e3a8a:#2563eb;
+}
+
+/* ===== ENTERPRISE-UI shell ===== */
+.vl-shell{ --vl-navon:#1c2d4f; --vl-accent:#3b82f6; --vl-accent-t:#93c5fd; --vl-onaccent:#fff; color:var(--vl-e2e8f0); }
+.vl-shell.vl-light{ --vl-navon:#dbeafe; --vl-accent:#2563eb; --vl-accent-t:#1d4ed8; color-scheme:light; }
+.vl-shell, .vl-shell button, .vl-shell input, .vl-shell select, .vl-shell textarea{ font-family:Inter,system-ui,sans-serif; }
+.vl-shell .mono, .vl-shell code, .vl-shell pre{ font-family:'JetBrains Mono',ui-monospace,monospace; }
+
+/* sidebar */
+.vl-sidebar{ animation:vlSideIn .45s cubic-bezier(.16,1,.3,1) both; }
+@keyframes vlSideIn{ from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:none} }
+.vl-status{ display:flex; align-items:center; gap:8px; margin-top:12px; padding:7px 10px; font-size:12px;
+  color:var(--vl-94a3b8); border:1px solid var(--vl-1e293b); border-radius:8px; }
+.vl-status i{ width:8px; height:8px; border-radius:50%; flex:none; }
+.vl-shell .nav-btn{ transition:background .15s,color .15s; }
+.vl-shell .nav-btn:hover{ background:var(--vl-1e293b)!important; }
+.vl-shell .nav-btn span{ color:inherit; }
+.vl-shell .nav-btn span:empty{ display:none; }
+.vl-shell .nav-btn span[title]{ font-size:10px!important; font-weight:600!important; padding:1px 5px!important; border-radius:4px!important; }
+
+/* top bar */
+.vl-topbar{ height:56px; flex:none; display:flex; align-items:center; gap:12px; padding:0 24px;
+  background:var(--vl-0a0f1e); border-bottom:1px solid var(--vl-1e293b); }
+.vl-crumb{ font-size:13px; color:var(--vl-64748b); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.vl-crumb span{ color:var(--vl-334155); margin:0 4px; }
+.vl-crumb b{ color:var(--vl-e2e8f0); font-weight:500; }
+.vl-topbar-r{ margin-left:auto; display:flex; align-items:center; gap:8px; flex:none; }
+.vl-tbtn{ background:transparent; border:1px solid var(--vl-1e293b); color:var(--vl-94a3b8); border-radius:8px;
+  padding:6px 12px; font-size:12px; font-weight:500; cursor:pointer; transition:background .15s,color .15s; }
+.vl-tbtn:hover{ background:var(--vl-1e293b); color:var(--vl-e2e8f0); }
+.vl-avatar{ width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:600; color:var(--vl-accent-t);
+  background:color-mix(in srgb,var(--vl-accent) 16%,transparent); }
+.vl-pagehead{ padding:20px 24px 16px; border-bottom:1px solid var(--vl-1e293b); background:var(--vl-0a0f1e); flex:none; }
+.vl-pagehead h1{ font-size:20px; font-weight:600; color:var(--vl-f1f5f9); margin:0 0 2px; letter-spacing:-.01em; }
+.vl-pagehead p{ font-size:13px; color:var(--vl-64748b); margin:0; }
+
+/* mobile drawer */
+.vl-burger{ display:none; background:transparent; border:1px solid var(--vl-1e293b); color:var(--vl-94a3b8);
+  border-radius:8px; width:34px; height:34px; align-items:center; justify-content:center; font-size:15px; cursor:pointer; flex:none; }
+.vl-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:59; }
+@media (max-width:760px){
+  .vl-burger{ display:inline-flex; }
+  .vl-sidebar{ position:fixed; z-index:60; top:0; bottom:0; left:0; transform:translateX(-105%);
+    transition:transform .25s cubic-bezier(.16,1,.3,1); animation:none; box-shadow:0 10px 40px rgba(0,0,0,.35); }
+  .vl-sidebar.open{ transform:none; }
+  .vl-topbar{ padding:0 12px; }
+  .vl-hide-sm{ display:none; }
+  .vl-pagehead{ padding:16px; }
+  .vl-content{ padding:14px!important; }
+}
+@media (min-width:761px){ .vl-close{ display:none!important; } }
+
+/* light mode: global text + inputs + scrollbars */
+.vl-shell.vl-light input, .vl-shell.vl-light textarea, .vl-shell.vl-light select{ color:var(--vl-e2e8f0)!important; }
+.vl-shell.vl-light ::-webkit-scrollbar-track{ background:#f3f4f6; }
+.vl-shell.vl-light ::-webkit-scrollbar-thumb{ background:#d1d5db; }
+
+/* dashboard */
+.vl-dash-head{ display:flex; justify-content:space-between; align-items:flex-end; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+.vl-dash-head h2{ font-size:22px; font-weight:600; color:var(--vl-f1f5f9); margin:0; letter-spacing:-.01em; }
+.vl-dash-head p{ font-size:13px; color:var(--vl-64748b); margin:3px 0 0; }
+.vl-online{ display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--vl-94a3b8);
+  border:1px solid var(--vl-1e293b); border-radius:999px; padding:5px 12px; background:var(--vl-0f172a); }
+.vl-online i{ width:7px; height:7px; border-radius:50%; background:#22c55e; }
+.vl-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+.vl-kpi{ background:var(--vl-0f172a); border:1px solid var(--vl-1e293b); border-radius:10px; padding:16px 18px; }
+.vl-light .vl-kpi, .vl-light .vl-card{ box-shadow:0 1px 2px rgba(16,24,40,.06); }
+.vl-kpi .l{ font-size:12px; color:var(--vl-94a3b8); }
+.vl-kpi .v{ font-size:28px; font-weight:600; color:var(--vl-f1f5f9); margin-top:6px; font-variant-numeric:tabular-nums; line-height:1.15; }
+.vl-kpi .d{ font-size:12px; color:var(--vl-64748b); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vl-grid2{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:16px; margin-bottom:16px; }
+.vl-card{ background:var(--vl-0f172a); border:1px solid var(--vl-1e293b); border-radius:10px; overflow:hidden; }
+.vl-card-h{ display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-bottom:1px solid var(--vl-1e293b); }
+.vl-card-h h3{ font-size:14px; font-weight:600; color:var(--vl-f1f5f9); margin:0; }
+.vl-card-h span{ font-size:12px; color:var(--vl-64748b); }
+.vl-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.vl-table th{ text-align:left; font-size:11px; font-weight:600; letter-spacing:.4px; text-transform:uppercase;
+  color:var(--vl-64748b); padding:9px 16px; border-bottom:1px solid var(--vl-1e293b); background:var(--vl-0a1628); }
+.vl-table td{ padding:10px 16px; border-bottom:1px solid var(--vl-1e293b); color:var(--vl-cbd5e1); }
+.vl-table tr:last-child td{ border-bottom:none; }
+.vl-table .mono{ font-size:12px; color:var(--vl-e2e8f0); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vl-chip{ display:inline-block; font-size:11px; font-weight:500; padding:2px 8px; border-radius:999px;
+  color:var(--c); background:color-mix(in srgb,var(--c) 14%,transparent); }
+.vl-empty{ padding:28px 16px; text-align:center; color:var(--vl-64748b); font-size:13px; }
+.vl-tools{ max-height:262px; overflow-y:auto; }
+.vl-tool{ display:flex; align-items:center; gap:10px; padding:8px 16px; border-bottom:1px solid var(--vl-1e293b); font-size:12.5px; }
+.vl-tool:last-child{ border-bottom:none; }
+.vl-tool i{ width:7px; height:7px; border-radius:50%; flex:none; }
+.vl-tool .n{ flex:1; font-family:'JetBrains Mono',monospace; color:var(--vl-e2e8f0); font-size:12px; }
+.vl-quick{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:16px; }
+.vl-qbtn{ text-align:left; background:var(--vl-020617); border:1px solid var(--vl-1e293b); border-radius:8px; padding:12px 14px;
+  cursor:pointer; transition:border-color .15s,background .15s; }
+.vl-qbtn:hover{ border-color:var(--vl-accent); background:color-mix(in srgb,var(--vl-accent) 6%,transparent); }
+.vl-qbtn b{ display:block; font-size:13px; font-weight:600; color:var(--vl-e2e8f0); }
+.vl-qbtn small{ display:block; font-size:12px; color:var(--vl-64748b); margin-top:2px; }
+@media (max-width:1000px){ .vl-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); } .vl-grid2{ grid-template-columns:1fr; } .vl-quick{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:480px){ .vl-kpi .v{ font-size:24px; } .vl-quick{ grid-template-columns:1fr; } }
+@media (prefers-reduced-motion:reduce){ .vl-sidebar{ animation:none; } }
