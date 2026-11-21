@@ -74,7 +74,7 @@ function AuditLog({ api, token }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13 }}>
               <span style={{ fontWeight: 600 }}>{r.action}</span>
-              {r.status && r.status !== "ok" && <span style={{ color: "#f59e0b", marginLeft: 8 }}>{r.status}</span>}
+              {r.status && r.status !== "ok" && <span style={{ color: "var(--t-f59e0b, #f59e0b)", marginLeft: 8 }}>{r.status}</span>}
             </div>
             <div style={C.sub}>{r.actor_name || r.actor_id || "—"} · {r.ip || "—"}
               {r.target ? ` · ${r.target}` : ""}{r.detail ? ` · ${r.detail}` : ""}</div>
@@ -124,8 +124,8 @@ function Mfa({ api, token }) {
       {msg && <div style={C.ok}>{msg}</div>}
       <div style={{ fontSize: 14, marginBottom: 10 }}>
         Status: {enabled === null ? "…" : enabled
-          ? <span style={{ color: "#34d399", fontWeight: 700 }}>Enabled</span>
-          : <span style={{ color: "#f59e0b", fontWeight: 700 }}>Disabled</span>}
+          ? <span style={{ color: "var(--t-34d399, #34d399)", fontWeight: 700 }}>Enabled</span>
+          : <span style={{ color: "var(--t-f59e0b, #f59e0b)", fontWeight: 700 }}>Disabled</span>}
       </div>
       {!enabled && !enroll && <button style={C.btn} onClick={begin}>Set up two-factor</button>}
       {!enabled && enroll && (
