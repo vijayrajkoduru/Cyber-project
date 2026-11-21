@@ -404,3 +404,84 @@
   .vl-light [style^="color: rgb(253, 230, 138)"],.vl-light [style*="; color: rgb(253, 230, 138)"]{color:#a58812!important}
   .vl-light [style^="color: rgb(254, 202, 202)"],.vl-light [style*="; color: rgb(254, 202, 202)"]{color:#a51212!important}
   /* LIGHT-NET:END */
+
+/* ===== ENTERPRISE-GRAPHICS-V1 (src/components/VlCharts.js) ===== */
+.vlc-card{ background:var(--vl-0f172a); border:1px solid var(--vl-1e293b); border-radius:10px; padding:14px 16px; min-width:0; }
+.vl-light .vlc-card, .vl-light .vlc-kpi{ box-shadow:0 1px 2px rgba(16,24,40,.06); }
+.vlc-card-t{ font-size:13px; font-weight:600; color:var(--vl-f1f5f9); margin:0 0 10px; }
+.vlc-sub{ text-align:center; font-size:12px; color:var(--vl-94a3b8); margin-top:2px; font-family:'JetBrains Mono',monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vlc-spark{ display:block; margin-top:8px; }
+.vlc-cols{ position:relative; display:flex; align-items:flex-end; gap:6px; padding-bottom:18px; }
+.vlc-cols-grid{ position:absolute; inset:0 0 18px 0; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
+.vlc-cols-grid i{ display:block; border-top:1px solid var(--vl-1e293b); }
+.vlc-col{ flex:1; height:100%; display:flex; align-items:flex-end; position:relative; z-index:1; }
+.vlc-col span{ display:block; width:100%; max-width:24px; margin:0 auto; border-radius:4px 4px 0 0; min-height:2px;
+  transition:height .7s cubic-bezier(.16,1,.3,1); }
+.vlc-cols-x{ position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:space-between; font-size:11px; color:var(--vl-64748b); }
+.vlc-donut-wrap{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.vlc-donut-n{ fill:var(--vl-f1f5f9); font-size:8px; font-weight:600; font-family:Inter,sans-serif; }
+.vlc-donut-c{ fill:var(--vl-94a3b8); font-size:3.4px; font-family:Inter,sans-serif; }
+.vlc-legend{ display:grid; gap:6px; font-size:12px; color:var(--vl-94a3b8); }
+.vlc-legend span{ display:flex; align-items:center; gap:7px; white-space:nowrap; }
+.vlc-legend i{ width:9px; height:9px; border-radius:2px; flex:none; }
+.vlc-legend b{ color:var(--vl-e2e8f0); font-weight:600; margin-left:auto; padding-left:8px; font-variant-numeric:tabular-nums; }
+.vlc-legend-row{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; }
+.vlc-legend-row b{ margin-left:2px; padding-left:0; }
+.vlc-gauge-n{ fill:var(--vl-f1f5f9); font-size:18px; font-weight:600; font-family:Inter,sans-serif; }
+.vlc-gauge-l{ fill:var(--vl-64748b); font-size:6.5px; font-family:Inter,sans-serif; }
+.vlc-ring-n{ fill:var(--vl-f1f5f9); font-size:8px; font-weight:600; font-family:Inter,sans-serif; }
+.vlc-ring-s{ fill:var(--vl-94a3b8); font-size:3.6px; font-family:Inter,sans-serif; }
+.vlc-stack{ display:flex; gap:2px; border-radius:6px; overflow:hidden; background:var(--vl-1e293b); }
+.vlc-stack span{ display:block; height:100%; transition:width .7s cubic-bezier(.16,1,.3,1); }
+.vlc-mini{ display:inline-flex; gap:2px; width:92px; height:7px; border-radius:4px; overflow:hidden; background:var(--vl-1e293b); flex:none; vertical-align:middle; }
+.vlc-mini i{ display:block; height:100%; transition:width .6s cubic-bezier(.16,1,.3,1); }
+.vlc-run i{ width:40%; background:var(--vl-accent); border-radius:4px; animation:vlcRun 1.1s ease-in-out infinite; }
+@keyframes vlcRun{ 0%{ transform:translateX(-100%);} 100%{ transform:translateX(250%);} }
+.vlc-pmeta{ display:inline-flex; align-items:center; gap:10px; flex:none; }
+.vlc-pmeta .t{ font-size:11px; color:var(--vl-94a3b8); font-family:'JetBrains Mono',monospace; min-width:96px; text-align:right; white-space:nowrap; }
+.vlc-secprog{ display:inline-flex; align-items:center; gap:10px; margin-left:auto; flex:none; }
+.vlc-secprog-t{ font-size:11px; color:var(--vl-64748b); font-weight:500; text-transform:none; letter-spacing:0; font-family:Inter,sans-serif; white-space:nowrap; }
+.vlc-secprog-b{ width:90px; height:4px; border-radius:3px; background:var(--vl-1e293b); overflow:hidden; display:inline-block; }
+.vlc-secprog-b i{ display:block; height:100%; border-radius:3px; transition:width .5s ease; }
+.vlc-hbars{ display:grid; gap:11px; }
+.vlc-hbar-t{ display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--vl-e2e8f0); margin-bottom:5px; }
+.vlc-hbar-t span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.vlc-hbar-t b{ color:var(--vl-94a3b8); font-weight:500; font-variant-numeric:tabular-nums; }
+.vlc-hbar-b{ height:8px; border-radius:4px; background:var(--vl-1e293b); overflow:hidden; }
+.vlc-hbar-b i{ display:block; height:100%; border-radius:4px; transition:width .8s cubic-bezier(.16,1,.3,1); }
+
+/* module overview */
+.vlc-overview{ margin:0 0 14px; }
+.vlc-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.vlc-kpi{ background:var(--vl-0f172a); border:1px solid var(--vl-1e293b); border-radius:10px; padding:12px 14px; }
+.vlc-kpi .l{ font-size:12px; color:var(--vl-94a3b8); }
+.vlc-kpi .v{ font-size:24px; font-weight:600; color:var(--vl-f1f5f9); margin-top:4px; font-variant-numeric:tabular-nums; line-height:1.15; }
+.vlc-kpi .v small{ font-size:14px; color:var(--vl-64748b); font-weight:500; }
+.vlc-ov-grid{ display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,.9fr); gap:12px; }
+.vlc-ov-ring{ display:flex; align-items:center; gap:14px; }
+.vlc-ov-now .l{ font-size:12px; color:var(--vl-64748b); }
+.vlc-ov-now .n{ font-size:14px; font-weight:600; color:var(--vl-accent-t); margin:3px 0; line-height:1.3; }
+.vlc-ov-donut{ display:flex; align-items:center; gap:14px; }
+.vlc-ov-donut .vlc-legend{ flex:1; min-width:0; }
+.vlc-ov-gauge .vlc-gauge svg{ height:92px; }
+@media (max-width:1200px){ .vlc-ov-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:760px){
+  .vlc-kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .vlc-ov-grid{ grid-template-columns:1fr; }
+  .vlc-mini{ width:56px; }
+  .vlc-pmeta .t{ min-width:0; }
+  .vlc-secprog-b{ width:50px; }
+}
+
+/* dashboard */
+.vld-kpi .v{ font-size:28px; }
+.vld-grid{ display:grid; gap:14px; margin-bottom:14px; }
+.vld-g1{ grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); }
+.vld-g2{ grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); }
+.vld-note{ font-size:12px; color:var(--vl-64748b); margin:-6px 0 14px; }
+@media (max-width:1000px){ .vld-g1, .vld-g2{ grid-template-columns:1fr; } }
+@media (prefers-reduced-motion:reduce){
+  .vlc-cols span, .vlc-stack span, .vlc-mini i, .vlc-hbar-b i, .vlc-secprog-b i{ transition:none!important; }
+  .vlc-run i{ animation:none; width:100%; }
+  .vlc-donut-wrap circle, .vlc-gauge path{ transition:none!important; }
+}

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import EnterpriseSettings from "./components/EnterpriseSettings";
+import { riskFromFindingsCvss, emptySev, findingsOf, sevFromFindings, sevTotal, addSev, riskFromSev, Sparkline, ColumnChart, SevDonut, RiskGauge, HBarList, MiniSev, SectionProgress, ModuleOverview, PhaseMeta, recordScan, readScans } from "./components/VlCharts";
 
 // Resolves the API base URL. Production builds (no explicit port) use same-origin so
 // requests go through the nginx proxy. Dev (CRA on :3000) defaults to localhost:8000.
@@ -4055,6 +4056,27 @@ function WebAppModule(props) {
     return c;
   })();
 
+  // ENTERPRISE-GRAPHICS-V1: per-phase timing + scan record for the dashboard
+  const phaseT = useRef({});
+  const _prevPh = useRef(-1);
+  const [scanEnd, setScanEnd] = useState(0);
+  useEffect(() => { phaseT.current = {}; _prevPh.current = -1; }, [scanStart]);
+  useEffect(() => {
+    const now = Date.now(), pv = _prevPh.current;
+    if (pv >= 0 && phaseT.current[pv] && !phaseT.current[pv].end) phaseT.current[pv].end = now;
+    if (curPhase >= 0) phaseT.current[curPhase] = {start: now};
+    _prevPh.current = curPhase;
+  }, [curPhase]);
+  const _recorded = useRef(0);
+  useEffect(() => {
+    if (!finished || !scanStart || _recorded.current === scanStart) return;
+    _recorded.current = scanStart;
+    setScanEnd(Date.now());
+    const _wf = synthesizeWebappFindings(allResults);
+    recordScan({module:"webapp", moduleLabel:"Web App Pentest", target, sev: sevFromFindings(_wf), risk: riskFromFindingsCvss(_wf), phases: done.length, durationMs: Date.now() - scanStart});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
   const add = l => setLines(p => [...p, l]);
 
   const setRunningState = (val) => {
@@ -4170,6 +4192,7 @@ function WebAppModule(props) {
               const idx = _toolToIdx[evt.tool];
               const data = evt.result || {};
               if (idx !== undefined) {
+                if (data && typeof data === "object" && evt.duration_sec != null) data._vlDur = evt.duration_sec;  // ENTERPRISE-GRAPHICS-V1
                 results[evt.tool] = data;
                 if (data._failed === true || data.ok === false) {
                   setFailed(p => [...p, idx]);
@@ -5049,17 +5072,13 @@ function WebAppModule(props) {
               </button>
             )}
             {finished && (() => {
-              const allF=[];
-              PHASES.forEach(ph=>{ if(allResults[ph.tool]?.findings) allResults[ph.tool].findings.forEach(f=>{ if(f.severity!=="INFO") allF.push(f); }); });
-              if(allResults["xss"]?.vulnerable)   allF.push({severity:"CRITICAL"});
-              if(allResults["cors"]?.vulnerable)   allF.push({severity:"HIGH"});
-              if(allResults["sqlmap"]?.vulnerable) allF.push({severity:"CRITICAL"});
-              const _pen=allF.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
-              const sc=Math.max(0,100-_pen);
-              const lb=sc<40?"CRITICAL":sc<70?"HIGH":sc<90?"MEDIUM":sc<100?"LOW":"SAFE";
-              const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
+              // ENTERPRISE-GRAPHICS-V1: same risk as the gauge and the Web App PDF (higher = worse)
+              const _rk = riskFromFindingsCvss(synthesizeWebappFindings(allResults));
+              const sc = _rk.score;
+              const lb = _rk.label.replace(/\s+risk$/i, "").toUpperCase();
+              const col = sc >= 80 ? "#dc2626" : sc >= 60 ? "#ea580c" : sc >= 40 ? "#ca8a04" : "#16a34a";
               return <>
-                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"var(--heading)",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
+                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
                 <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Result(pdf)</button>
                 <div style={{position:"relative"}}>
                   <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:6,padding:"11px 16px",color:"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
@@ -5097,6 +5116,32 @@ function WebAppModule(props) {
           </div>
         </div>
       </div>
+
+      {/* ENTERPRISE-GRAPHICS-V1 module overview */}
+      {(() => {
+        const sel = PHASES.map((_,j)=>j).filter(j => selectedPhases.has(j));
+        const st = {sec:0, vul:0, skp:0, err:0, q:0, run:0};
+        sel.forEach(j => {
+          const res = allResults[PHASES[j].tool];
+          const sk = skipped.includes(j), fl = failed.includes(j) && !sk, dn = done.includes(j);
+          if (curPhase === j) st.run++;
+          else if (fl) st.err++;
+          else if (sk) st.skp++;
+          else if (dn && res && (res.vulnerable || sevTotal(sevFromFindings(synthesizeWebappFindings({[PHASES[j].tool]: res})), false) > 0)) st.vul++;
+          else if (dn) st.sec++;
+          else st.q++;
+        });
+        const _wf = synthesizeWebappFindings(allResults);
+        const sev = sevFromFindings(_wf);
+        return <ModuleOverview risk={riskFromFindingsCvss(_wf)} total={sel.length} done={done.filter(j=>selectedPhases.has(j)).length} running={running}
+          current={curPhase >= 0 ? PHASES[curPhase].name : `${done.filter(j=>selectedPhases.has(j)).length} of ${sel.length} checks complete`} startedAt={scanStart} finishedAt={scanEnd || undefined}
+          hasRun={running || finished || done.length > 0} sev={sev}
+          status={[
+            {label:"Secure", n:st.sec, color:"#22c55e"}, {label:"Vulnerable", n:st.vul, color:"#f97316"},
+            {label:"Skipped", n:st.skp, color:"#eab308"}, {label:"Error", n:st.err, color:"#ef4444"},
+            {label:"Running", n:st.run, color:"#3b82f6"}, {label:"Queued", n:st.q, color:"var(--vl-334155)"},
+          ]}/>;
+      })()}
 
       {/* WAPT-TERMINAL-POSITION-V2 — Terminal moved to bottom of PHASES tab
           so it appears AFTER all the tools end, not before. */}
@@ -5146,60 +5191,6 @@ function WebAppModule(props) {
           ))}
         </div>
 
-        {/* ─── LIVE SCAN TELEMETRY ─── shows only while scan is running.
-             Customer watches findings accumulate in real-time + sees ETA,
-             current phase, and progress bar. Trust-building feedback —
-             without this, scans feel like a 5-min black-box spinner. */}
-        {running && (() => {
-          const doneCount = done.length;
-          const totalCount = (selectedPhases?.size || PHASES.length) || 1;
-          const elapsed = Math.floor((Date.now() - scanStart) / 1000);
-          const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
-          const eta = doneCount > 0 ? Math.max(0, Math.floor((elapsed * totalCount / doneCount) - elapsed)) : null;
-          const pct = Math.min(100, Math.round(doneCount / totalCount * 100));
-          const currentPhase = curPhase >= 0 ? PHASES[curPhase] : null;
-          const totalFindings = liveCounts.CRITICAL + liveCounts.HIGH + liveCounts.MEDIUM + liveCounts.LOW;
-          return (
-            <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
-              {/* Row 1: progress + current phase + timing */}
-              <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 280px",minWidth:240}}>
-                  <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>SCANNING</span>
-                  <span style={{fontSize:13,color:"var(--text)",fontWeight:600,fontFamily:"var(--font-mono)"}}>
-                    {currentPhase ? `${currentPhase.icon||""} ${currentPhase.name}` : "Initializing..."}
-                  </span>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"var(--font-mono)",color:"var(--muted)"}}>
-                  <span>Phase <b style={{color:"var(--t-3b82f6, #3b82f6)"}}>{doneCount}</b>/<b style={{color:"var(--text)"}}>{totalCount}</b></span>
-                  <span>Elapsed <b style={{color:"var(--t-22c55e, #22c55e)"}}>{fmt(elapsed)}</b></span>
-                  {eta !== null && <span>ETA <b style={{color:"var(--t-f59e0b, #f59e0b)"}}>~{fmt(eta)}</b></span>}
-                </div>
-              </div>
-              {/* Row 2: progress bar */}
-              <div style={{height:6,background:"var(--surface)",borderRadius:3,overflow:"hidden",border:"1px solid var(--border)"}}>
-                <div style={{height:"100%",width:`${pct}%`,background:"var(--accent)",transition:"width 0.6s ease",borderRadius:3}}/>
-              </div>
-              {/* Row 3: live finding counter */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>FINDINGS SO FAR:</span>
-                {[
-                  {label:"CRITICAL", n:liveCounts.CRITICAL, color:"#f87171", bg:"#1c0000"},
-                  {label:"HIGH",     n:liveCounts.HIGH,     color:"#fb923c", bg:"#1c0a00"},
-                  {label:"MEDIUM",   n:liveCounts.MEDIUM,   color:"#fbbf24", bg:"#1c1500"},
-                  {label:"LOW",      n:liveCounts.LOW,      color:"#4ade80", bg:"#052e16"},
-                ].map(s=>(
-                  <span key={s.label} style={{background:s.bg,border:`1px solid ${s.color}50`,color:s.color,fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:5,fontFamily:"var(--font-mono)"}}>
-                    {s.n} {s.label}
-                  </span>
-                ))}
-                {totalFindings === 0 && (
-                  <span style={{fontSize:11,color:"var(--dim)",fontStyle:"italic"}}>No issues found yet — scan in progress...</span>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-
         {/* Phase selection controls */}
         {!running && (
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
@@ -5232,7 +5223,9 @@ function WebAppModule(props) {
           const isFailed   = failed.includes(i) && !isSkipped;
           const res        = allResults[ph.tool];
           const isSQLi     = ph.tool === "sqlmap" && res && res.vulnerable;
-          const isVuln     = res && res.vulnerable && !isSQLi;
+          // ENTERPRISE-GRAPHICS-V1: per-phase severity uses the same normalisation as the PDF
+          const rowSev     = (isDone && res) ? sevFromFindings(synthesizeWebappFindings({[ph.tool]: res})) : null;
+          const isVuln     = res && !isSQLi && (res.vulnerable || (rowSev && sevTotal(rowSev, false) > 0));
           const isSelected   = selectedPhases.has(i);
           const toolLocked   = isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin;
           const secHdr       = SECTION_HEADERS[ph.tool];
@@ -5254,6 +5247,8 @@ function WebAppModule(props) {
                   <div style={{fontSize:10,fontWeight:700,color:secHdr.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{secHdr.label}</div>
                   <div style={{fontSize:10,color:"var(--dim)"}}>{secHdr.sub}</div>
                 </div>
+                {(() => { const mem = []; for (let j = i; j < PHASES.length; j++) { if (j > i && SECTION_HEADERS[PHASES[j].tool]) break; if (selectedPhases.has(j)) mem.push(j); }
+                  return <SectionProgress done={mem.filter(j => done.includes(j)).length} total={mem.length} color={secHdr.color}/>; })()}
                 {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"var(--t-f59e0b, #f59e0b)",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>TRIAL</span>}
                 {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"var(--dim)",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>PRO</span>}
               </div>
@@ -5276,7 +5271,11 @@ function WebAppModule(props) {
               )}
               <span style={{fontSize:13,fontWeight:500,color:toolLocked?"var(--dim)":"var(--heading)",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
               <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
-              <span style={{fontSize:11,color:"var(--muted)",fontFamily:"var(--font-mono)",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
+              {isFailed||isSkipped
+                ? <span style={{fontSize:11,color:"var(--muted)",fontFamily:"var(--font-mono)",minWidth:100,textAlign:"right",flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:220}} title={detail}>{detail}</span>
+                : <PhaseMeta running={isActive} res={isDone ? {...(res||{}), tool: ph.tool} : null} sev={rowSev || undefined}
+                    countText={/ports|items/.test(detail || "") ? detail : undefined}
+                    elapsedMs={res && res._vlDur != null ? res._vlDur * 1000 : (phaseT.current[i] && phaseT.current[i].end ? phaseT.current[i].end - phaseT.current[i].start : undefined)}/>}
               {isDone && res && (
                 <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
                   style={{background:expandedTile===i?"var(--nav-active)":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"var(--border)"),borderRadius:4,padding:"3px 10px",color:"var(--muted)",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
@@ -9115,46 +9114,62 @@ function CountUp({ value, duration = 900 }) {
 }
 
 function Dashboard(props) {
+  // ENTERPRISE-GRAPHICS-V1: charts are built from scans recorded by every
+  // module when a run finishes (VlCharts.recordScan). No fake numbers: with
+  // no scans yet every chart shows an empty state.
   const token = props.token;
-  const [stats,setStats]   = useState(null);
   const [health,setHealth] = useState(null);
+  const [scans,setScans]   = useState(() => readScans());
 
   useEffect(()=>{
-    api("/api/health",  "GET",null,token).then(d=>setHealth(d)).catch(()=>{});
-    api("/api/scans",   "GET",null,token).then(d=>setStats(d)).catch(()=>{});
+    api("/api/health","GET",null,token).then(d=>setHealth(d)).catch(()=>{});
+    const onRec = () => setScans(readScans());
+    window.addEventListener("vl-scan-recorded", onRec);
+    return () => window.removeEventListener("vl-scan-recorded", onRec);
   },[token]);
 
-  const recentScans = stats?.scans?.slice(-6).reverse() || [];
-  const freeTools   = health ? Object.entries(health.free_tools||{}) : [];
-  const available   = freeTools.filter(([,v])=>v.available).length;
-  const moduleCount = MODULES.filter(m => m.id !== "dashboard" && !m.comingSoon).length;
+  const freeTools = health ? Object.entries(health.free_tools||{}) : [];
+  const available = freeTools.filter(([,v])=>v.available).length;
+
+  // last 14 days, oldest → today
+  const DAY = 86400000;
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const days = Array.from({length:14}, (_,i) => today0.getTime() - (13-i)*DAY);
+  const dayIdx = (ts) => { const d = new Date(ts); d.setHours(0,0,0,0); return days.indexOf(d.getTime()); };
+  const perDay = (fn) => { const a = days.map(()=>0); scans.forEach(sc => { const i = dayIdx(sc.ts); if (i >= 0) a[i] += fn(sc); }); return a; };
+  const dayLabels = days.map(t => new Date(t).toLocaleDateString(undefined,{day:"numeric",month:"short"}));
+  dayLabels[13] = "Today";
+
+  const sevAll  = scans.reduce((acc, sc) => addSev(acc, sc.sev || {}), emptySev());
+  const findTot = sevTotal(sevAll, false);
+  const targets = Array.from(new Set(scans.map(sc => sc.target).filter(Boolean)));
+  const latest  = scans[0];
+  const riskOf  = (sc) => (sc && sc.risk && typeof sc.risk.score === "number") ? sc.risk : riskFromSev((sc && sc.sev) || emptySev());
+  const risk    = latest ? riskOf(latest) : null;
+
+  // most vulnerable targets: latest scan per (module, target), summed per target
+  const latestPer = {};
+  scans.forEach(sc => { const k = sc.module + "|" + sc.target; if (!latestPer[k]) latestPer[k] = sc; });
+  const perTarget = {};
+  Object.values(latestPer).forEach(sc => { if (!sc.target) return; perTarget[sc.target] = addSev(perTarget[sc.target] || emptySev(), sc.sev || {}); });
+  const topTargets = Object.entries(perTarget)
+    .map(([t, c]) => ({label: t, value: sevTotal(c, false), color: riskFromSev(c).color}))
+    .filter(x => x.value > 0).sort((a,b) => b.value - a.value).slice(0, 5);
 
   const kpis = [
-    {label:"Total scans",      val:stats?.total||0,  note: recentScans.length ? "Latest: " + (recentScans[0].target || recentScans[0].tool || "—") : "No scans yet"},
-    {label:"Tools available",  val:available,        note: freeTools.length ? available + " of " + freeTools.length + " installed" : "Checking backend…"},
-    {label:"Modules",          val:moduleCount,      note:"Ready to run"},
-    {label:"Platform version", text:"v3.1",          note:"Kali Linux backend"},
+    {label:"Total scans",     val:scans.length, spark:perDay(()=>1),                              color:"#3b82f6", note: latest ? "Latest: " + (latest.target || latest.moduleLabel) : "No scans yet"},
+    {label:"Findings",        val:findTot,      spark:perDay(sc=>sevTotal(sc.sev||{},false)),     color:"#f97316", note: scans.length ? "Across all recorded scans" : "Run a scan to start"},
+    {label:"Critical",        val:sevAll.CRITICAL, spark:perDay(sc=>(sc.sev&&sc.sev.CRITICAL)||0), color:"#ef4444", note: (sevAll.HIGH||0) + " high"},
+    {label:"Targets scanned", val:targets.length, spark:perDay(()=>1),                            color:"#22c55e", note: available ? available + " of " + freeTools.length + " tools ready" : "Checking tools…"},
   ];
-
-  const statusColor = (st) => {
-    const v = String(st||"").toLowerCase();
-    if (v === "complete" || v === "completed" || v === "done" || v === "success") return "#22c55e";
-    if (v === "running" || v === "queued" || v === "pending") return "#3b82f6";
-    return "#ef4444";
-  };
-  const when = (s) => {
-    const raw = s.finished_at || s.completed_at || s.created_at || s.timestamp || s.date;
-    if (!raw) return "—";
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? String(raw) : d.toLocaleString(undefined,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
-  };
 
   const quick = [
-    {label:"Web app pentest",  sub:"OWASP Top 10 checks",       mod:"webapp"},
-    {label:"Recon & OSINT",    sub:"Map the attack surface",    mod:"recon"},
-    {label:"Vulnerability scan", sub:"Network & service checks", mod:"vuln"},
-    {label:"Password attacks", sub:"Credential strength tests", mod:"password"},
+    {label:"Web app pentest",    sub:"OWASP Top 10 checks",       mod:"webapp"},
+    {label:"Recon & OSINT",      sub:"Map the attack surface",    mod:"recon"},
+    {label:"Vulnerability scan", sub:"Network & service checks",  mod:"vuln"},
+    {label:"Password attacks",   sub:"Credential strength tests", mod:"password"},
   ];
+  const when = (ts) => new Date(ts).toLocaleString(undefined,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
 
   return (
     <div className="fade">
@@ -9163,38 +9178,64 @@ function Dashboard(props) {
           <h2>Dashboard</h2>
           <p>{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
         </div>
-        <span className="vl-online"><i style={{background: health ? "#22c55e" : "#f59e0b"}}/>{health ? "System online" : "Connecting…"}</span>
+        <span className="vl-online"><i style={{background: health ? "#22c55e" : "#f59e0b"}}/>{health ? "Kali Linux live" : "Connecting…"}</span>
       </div>
+      <p className="vld-note">Charts cover the scans run in this browser since you signed in.</p>
 
       <div className="vl-kpis">
         {kpis.map((k,i)=>(
-          <div key={i} className="vl-kpi">
+          <div key={i} className="vl-kpi vld-kpi">
             <div className="l">{k.label}</div>
-            <div className="v">{k.text ? k.text : <CountUp value={k.val}/>}</div>
+            <div className="v" style={{color: k.label==="Critical" && k.val ? "#ef4444" : undefined}}><CountUp value={k.val}/></div>
+            <Sparkline values={k.spark} color={k.color}/>
             <div className="d">{k.note}</div>
           </div>
         ))}
+      </div>
+
+      <div className="vld-grid vld-g1">
+        <section className="vlc-card">
+          <div className="vlc-card-t">Scan activity · last 14 days</div>
+          <ColumnChart values={perDay(()=>1)} labels={dayLabels} height={150}/>
+        </section>
+        <section className="vlc-card">
+          <div className="vlc-card-t">Findings by severity</div>
+          <SevDonut sev={sevAll} size={128} withInfo={false}/>
+        </section>
+      </div>
+
+      <div className="vld-grid vld-g2">
+        <section className="vlc-card">
+          <div className="vlc-card-t">Risk score · latest scan</div>
+          <RiskGauge score={risk ? risk.score : undefined} label={risk && risk.label} color={risk && risk.color}
+            sub={latest ? (latest.target || latest.moduleLabel) : "Run a scan to see its risk"}/>
+        </section>
+        <section className="vlc-card">
+          <div className="vlc-card-t">Most vulnerable targets</div>
+          {topTargets.length ? <HBarList items={topTargets}/> : <div className="vl-empty">No findings recorded yet.</div>}
+        </section>
       </div>
 
       <div className="vl-grid2">
         <section className="vl-card">
           <div className="vl-card-h">
             <h3>Recent scans</h3>
-            <button className="vl-tbtn" onClick={()=>props.setActive("history")}>View all</button>
+            <span>{scans.length} recorded</span>
           </div>
-          {recentScans.length>0 ? (
+          {scans.length>0 ? (
             <div style={{overflowX:"auto"}}>
               <table className="vl-table">
-                <thead><tr><th>Target</th><th>Tool</th><th>Status</th><th>Finished</th></tr></thead>
+                <thead><tr><th>Target</th><th>Module</th><th>Findings</th><th>Risk</th><th>Finished</th></tr></thead>
                 <tbody>
-                  {recentScans.map((s,i)=>(
+                  {scans.slice(0,6).map((s,i)=>{ const r = riskOf(s); return (
                     <tr key={i}>
                       <td className="mono" title={s.target}>{s.target || "—"}</td>
-                      <td>{s.tool || "—"}</td>
-                      <td><span className="vl-chip" style={{"--c":statusColor(s.status)}}>{s.status || "unknown"}</span></td>
-                      <td style={{whiteSpace:"nowrap",color:"var(--vl-64748b)"}}>{when(s)}</td>
+                      <td>{s.moduleLabel || s.module}</td>
+                      <td style={{whiteSpace:"nowrap"}}><MiniSev sev={s.sev||emptySev()}/> <span style={{marginLeft:6}}>{sevTotal(s.sev||{},false)}</span></td>
+                      <td><span className="vl-chip" style={{"--c":r.color}}>{r.score}</span></td>
+                      <td style={{whiteSpace:"nowrap",color:"var(--vl-64748b)"}}>{when(s.ts)}</td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
@@ -12762,6 +12803,31 @@ function ReconModule({token, onRunningChange, activeSections}) {
 
   const stop = () => { stopRef.current = true; setStopped(true); };
 
+  // ENTERPRISE-GRAPHICS-V1: run timing, per-phase timing, dashboard record
+  const [rStart, setRStart] = useState(0);
+  const [rEnd, setREnd]     = useState(0);
+  const rPhaseT = useRef({});
+  const _rPrev  = useRef(-1);
+  useEffect(() => {
+    if (running) { setRStart(Date.now()); setREnd(0); rPhaseT.current = {}; _rPrev.current = -1; }
+    else setREnd(e => e || Date.now());
+  }, [running]);
+  useEffect(() => {
+    const now = Date.now(), pv = _rPrev.current;
+    if (pv >= 0 && rPhaseT.current[pv] && !rPhaseT.current[pv].end) rPhaseT.current[pv].end = now;
+    if (curPhase >= 0) rPhaseT.current[curPhase] = {start: now};
+    _rPrev.current = curPhase;
+  }, [curPhase]);
+  const _rRec = useRef(0);
+  useEffect(() => {
+    if (!finished || !rStart || _rRec.current === rStart) return;
+    _rRec.current = rStart;
+    let sev = emptySev();
+    try { sev = sevFromFindings(synthesizeReconFindings(allResults)); } catch (e) {}
+    recordScan({module:"recon", moduleLabel:"Recon", target, sev, phases: done.length, durationMs: Date.now() - rStart});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
   const togglePhase = i => setSelected(prev => {
     const next = new Set(prev);
     next.has(i) ? next.delete(i) : next.add(i);
@@ -12900,6 +12966,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
               const idx = _toolToIdx[evt.tool];
               const data = evt.result || {};
               if (idx !== undefined) {
+                if (data && typeof data === "object" && evt.duration_sec != null) data._vlDur = evt.duration_sec;  // ENTERPRISE-GRAPHICS-V1
                 results[evt.tool] = data;
                 if (data._failed === true || data.ok === false) {
                   setFailed(p=>[...p,idx]);
@@ -13563,6 +13630,33 @@ function ReconModule({token, onRunningChange, activeSections}) {
         </div>
       </div>
 
+      {/* ENTERPRISE-GRAPHICS-V1 module overview */}
+      {(() => {
+        const sel = RECON_PHASES.map((_,j)=>j).filter(j => selectedPhases.has(j));
+        const st = {data:0, empty:0, err:0, q:0, run:0};
+        sel.forEach(j => {
+          const res = allResults[RECON_PHASES[j].tool];
+          if (curPhase === j) st.run++;
+          else if (failed.includes(j)) st.err++;
+          else if (done.includes(j)) {
+            const n = res ? ((res.subdomains||[]).length || (res.ports||[]).length || (res.found||[]).length || (res.records||[]).length ||
+              (res.discovered||[]).length || (res.paths||[]).length || (res.emails||[]).length || (res.vulns||[]).length ||
+              (res.findings||[]).length || (res.total||0)) : 0;
+            if (n) st.data++; else st.empty++;
+          } else st.q++;
+        });
+        let sev = emptySev();
+        try { sev = sevFromFindings(synthesizeReconFindings(allResults)); } catch (e) {}
+        return <ModuleOverview total={sel.length} done={done.filter(j=>selectedPhases.has(j)).length} running={running}
+          current={curPhase >= 0 ? RECON_PHASES[curPhase].name : `${done.filter(j=>selectedPhases.has(j)).length} of ${sel.length} checks complete`} startedAt={rStart || undefined} finishedAt={rEnd || undefined}
+          hasRun={running || finished || done.length > 0} sev={sev}
+          status={[
+            {label:"Data", n:st.data, color:"#22c55e"}, {label:"Empty", n:st.empty, color:"#94a3b8"},
+            {label:"Error", n:st.err, color:"#ef4444"}, {label:"Running", n:st.run, color:"#3b82f6"},
+            {label:"Queued", n:st.q, color:"var(--vl-334155)"},
+          ]}/>;
+      })()}
+
       {/* Badge Legend — explains the tile status colors */}
       <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:8,flexWrap:"wrap",marginBottom:10}}>
         <span style={{fontSize:11,color:"var(--dim)",fontWeight:700,letterSpacing:0.5}}>RESULTS:</span>
@@ -13627,8 +13721,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
             return (
               <React.Fragment key={i}>
               {_showHeader && (
-                <div style={{padding:"14px 16px 10px",background:"var(--surface)",borderTop:"2px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",letterSpacing:0.5,textTransform:"uppercase",fontFamily:"var(--font-mono)"}}>
-                  {_secMeta.label}
+                <div style={{padding:"14px 16px 10px",background:"var(--surface)",borderTop:"2px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--t-60a5fa, #60a5fa)",letterSpacing:0.5,textTransform:"uppercase",fontFamily:"var(--font-mono)",display:"flex",alignItems:"center",gap:12}}>
+                  <span>{_secMeta.label}</span>
+                  {(() => { const mem = RECON_PHASES.map((_,j)=>j).filter(j => (SECTION_OF[RECON_PHASES[j].tool]||99) === _sec && selectedPhases.has(j));
+                    return <SectionProgress done={mem.filter(j => done.includes(j)).length} total={mem.length}/>; })()}
                 </div>
               )}
               <div onClick={()=>!running&&togglePhase(i)}
@@ -13645,7 +13741,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 )}
                 <span style={{flex:1,fontSize:13,fontWeight:500,color:"var(--heading)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
                 <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:90,textAlign:"right"}}>{statusLabel}</span>
-                <span style={{fontSize:11,color:isFailed?"var(--t-f87171, #f87171)":itemsCount>0?"var(--t-60a5fa, #60a5fa)":"var(--muted)",fontFamily:"var(--font-mono)",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
+                {isFailed
+                  ? <span style={{fontSize:11,color:"var(--t-f87171, #f87171)",fontFamily:"var(--font-mono)",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
+                  : <PhaseMeta running={isActive} res={isDone ? (res || {}) : null} countText={itemsLabel || undefined}
+                      elapsedMs={res && res._vlDur != null ? res._vlDur * 1000 : (rPhaseT.current[i] && rPhaseT.current[i].end ? rPhaseT.current[i].end - rPhaseT.current[i].start : undefined)}/>}
                 {isDone && (
                   <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
                     style={{background:expandedTile===i?"var(--nav-active)":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"var(--border)"),borderRadius:4,padding:"3px 12px",color:"var(--muted)",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
@@ -21349,6 +21448,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [running,   setRunning]   = useState(false);
   const [results,   setResults]   = useState({});
   const [progress,  setProgress]  = useState({done:0, total:0});
+  const [mStart, setMStart] = useState(0);   // ENTERPRISE-GRAPHICS-V1 run timing
+  const [mEnd,   setMEnd]   = useState(0);
   // Phase E: chain_summary from /api/password/run_all_buffered or the
   // streaming wrapper's final NDJSON record. Populates the Attack Chain
   // section in the PDF generator. Stays null until a chain_summary
@@ -21398,6 +21499,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       sevCounts: sevC,
       executed: Object.values(scanResults).filter(r => r.status === "done").length,
     };
+    // ENTERPRISE-GRAPHICS-V1: feed the dashboard charts
+    let _fsev = emptySev();
+    Object.values(scanResults).forEach(r => { if (r && r.status === "done") _fsev = sevFromFindings(findingsOf(r.data), _fsev); });
+    recordScan({module: moduleKey, moduleLabel, target: target || (advInputs && (advInputs.image_ref || advInputs.repo_url)) || moduleLabel,
+      sev: _fsev, phases: entry.executed, durationMs: mStart ? Date.now() - mStart : undefined});
     const next = [entry, ...history].slice(0, 5);    // keep last 5
     try {
       localStorage.setItem(`vl_scans:${moduleKey}`, JSON.stringify(next));
@@ -21523,6 +21629,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const runAll = async () => {
     if (!canRun) return;
     setRunning(true);
+    setMStart(Date.now()); setMEnd(0);
     setResults({});
     setProgress({done:0, total: totalTools});
 
@@ -21725,6 +21832,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       });
     } finally {
       setRunning(false);
+      setMEnd(Date.now());
       // Save scan to history (use a ref-style read of current results)
       setResults(currentResults => {
         if (Object.values(currentResults).some(r => r.status === "done")) {
@@ -22267,6 +22375,32 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
       )}
 
+      {/* ENTERPRISE-GRAPHICS-V1 module overview */}
+      {activeTab === "auto" && tiers.length > 0 && (() => {
+        const inRun = Object.keys(results);
+        const total = inRun.length || (selectedTiers ? tiers.filter(t => selectedTiers.has(t.id)) : tiers).reduce((n, t) => n + (t.count || 0), 0);
+        const st = {find:0, clean:0, skp:0, err:0, q:0};
+        let sev = emptySev();
+        inRun.forEach(t => {
+          const r = results[t] || {};
+          if (!r.status || r.status === "queued") st.q++;
+          else if (r.status === "error") st.err++;
+          else if (r.status !== "done") st.skp++;
+          else if (r.data && (r.data._skipped || String(r.data.status || "").toUpperCase() === "SKIPPED")) st.skp++;
+          else { const f = findingsOf(r.data); sev = sevFromFindings(f, sev); if (sevTotal(sevFromFindings(f), false)) st.find++; else st.clean++; }
+        });
+        if (!inRun.length) st.q = total;
+        const doneN = inRun.length ? inRun.length - st.q : 0;
+        return <ModuleOverview total={total} done={doneN} running={running}
+          current={running ? `${doneN} of ${total} checks complete` : ""} startedAt={mStart || undefined} finishedAt={mEnd || undefined}
+          hasRun={running || doneN > 0} sev={sev}
+          status={[
+            {label:"Findings", n:st.find, color:"#f97316"}, {label:"Clean", n:st.clean, color:"#22c55e"},
+            {label:"Skipped", n:st.skp, color:"#94a3b8"}, {label:"Error", n:st.err, color:"#ef4444"},
+            {label:"Queued", n:st.q, color:"var(--vl-334155)"},
+          ]}/>;
+      })()}
+
       {/* Severity filter chips + tool-name search (auto tab only) */}
       {activeTab === "auto" && tiers.length > 0 && completedCount > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:12,
@@ -22426,10 +22560,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                               textTransform:"uppercase", letterSpacing:0.5}}>
                   {sectionTitle(tier.id, idx)}
                 </div>
-                <div style={{fontSize:10, color:"var(--dim)", marginTop:2}}>
-                  {filteredTools.length === tier.count
+                <div style={{fontSize:10, color:"var(--dim)", marginTop:2, display:"flex", alignItems:"center", gap:12}}>
+                  <span>{filteredTools.length === tier.count
                     ? `${tier.count} scanner${tier.count !== 1 ? "s" : ""}`
-                    : `${filteredTools.length} of ${tier.count} scanner${tier.count !== 1 ? "s" : ""}`}
+                    : `${filteredTools.length} of ${tier.count} scanner${tier.count !== 1 ? "s" : ""}`}</span>
+                  {(() => { const inRun = (tier.tools || []).filter(t => results[t]);
+                    return inRun.length ? <SectionProgress done={inRun.filter(t => ["done","error","blocked","auth_failed","out_of_scope"].includes(results[t].status)).length} total={inRun.length} color={tcolor}/> : null; })()}
                 </div>
               </div>
               {/* Full-width scanner rows */}
@@ -22468,16 +22604,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                           </span>
                         );
                       })()}
-                      {typeof r.count === "number" && r.count > 0 && (
-                        <span style={{color:"var(--muted)", fontSize:11, fontWeight:600}}>
-                          {r.count}
-                        </span>
-                      )}
-                      {r.elapsed && (
-                        <span style={{color:"var(--dim)", fontSize:10, fontFamily:"var(--font-mono)"}}>
-                          {(r.elapsed/1000).toFixed(1)}s
-                        </span>
-                      )}
+                      {r.status === "done" && !_isSkip(r)
+                        ? <PhaseMeta res={r.data || {}} countText={`${r.count || 0} finding${r.count === 1 ? "" : "s"}`} elapsedMs={r.elapsed}/>
+                        : <PhaseMeta running={running && (!r.status || r.status === "queued")} res={null}/>}
                       <span style={{color:statusColor(r), fontSize:10, fontWeight:700,
                                     textTransform:"uppercase", letterSpacing:0.5,
                                     minWidth:60, textAlign:"right"}}>
