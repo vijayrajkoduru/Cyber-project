@@ -103,6 +103,10 @@ def _run_nikto(url: str, timeout_s: int = 90) -> tuple[int, str, str]:
         "-Tuning", "x",  # exclude DoS checks
         "-Plugins", "@@DEFAULT;-cgi",  # skip exhaustive CGI scan (slow + noisy)
     ]
+    # UNDERSCORE-HOST-V4 (separate process; see tools/_core/host_header.py)
+    from tools._core.host_header import cleaned_host as _ch
+    if _ch(url):
+        cmd.extend(["-vhost", _ch(url)])
     try:
         proc = subprocess.run(
             cmd,

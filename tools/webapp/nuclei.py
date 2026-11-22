@@ -71,6 +71,10 @@ def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
         cmd.extend(["-H", f"Authorization: Bearer {req.auth_bearer}"])
     if getattr(req, "auth_cookie", None):
         cmd.extend(["-H", f"Cookie: {req.auth_cookie}"])
+    # UNDERSCORE-HOST-V4 (separate process; see tools/_core/host_header.py)
+    from tools._core.host_header import cleaned_host as _ch
+    if _ch(target):
+        cmd.extend(["-H", f"Host: {_ch(target)}"])
 
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)

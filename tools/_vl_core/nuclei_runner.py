@@ -110,6 +110,11 @@ def run_nuclei(req, tags: list[str], *,
         cmd.extend(["-H", f"Authorization: Bearer {_hs(req.auth_bearer)}"])
     if getattr(req, "auth_cookie", None):
         cmd.extend(["-H", f"Cookie: {_hs(req.auth_cookie)}"])
+    # UNDERSCORE-HOST-V4 — nuclei is a separate process, so the Python
+    # transport hook can't fix its Host header; pass it explicitly.
+    from tools._core.host_header import cleaned_host as _ch
+    if _ch(target):
+        cmd.extend(["-H", f"Host: {_ch(target)}"])
 
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,

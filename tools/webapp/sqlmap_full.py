@@ -51,6 +51,10 @@ def _run_sqlmap(url: str) -> tuple[int, str, str]:
         "--disable-coloring",
         "--output-dir=/tmp/sqlmap", # don't pollute home dir
     ]
+    # UNDERSCORE-HOST-V4 (separate process; see tools/_core/host_header.py)
+    from tools._core.host_header import cleaned_host as _ch
+    if _ch(url):
+        cmd.append(f"--host={_ch(url)}")
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True,

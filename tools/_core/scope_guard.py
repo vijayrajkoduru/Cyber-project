@@ -36,6 +36,8 @@ from contextlib import contextmanager
 from typing import Optional
 from urllib.parse import urlparse
 
+from tools._core import host_header as _hh  # UNDERSCORE-HOST-V4
+
 log = logging.getLogger("vulnuslab.scope_guard")
 
 _SCAN_CTX: contextvars.ContextVar = contextvars.ContextVar("vl_scan_profile_ctx", default=None)
@@ -389,6 +391,17 @@ def install_transport_guards() -> None:
         _orig_send = _requests.Session.send
 
         def _vl_send(self, request, **kw):
+            # UNDERSCORE-HOST-V4 — every mode, every hop (see host_header.py).
+            try:
+                _ru = _hh.restore_url(request.url or "")
+                if _ru:  # redirect hop to a cleaned lab name -> real name
+                    request.url = _ru
+                    request.headers.pop("Host", None)
+                _nh = _hh.should_replace(request.url or "", request.headers.get("Host"))
+                if _nh:
+                    request.headers["Host"] = _nh
+            except Exception:
+                pass
             if _SCAN_CTX.get() is not None:
                 url = request.url or ""
                 if _is_internal(url):
@@ -422,7 +435,21 @@ def install_transport_guards() -> None:
             return httpx.Request(request.method, request.url, headers=hdrs, content=nb,
                                  extensions=request.extensions)
 
+        def _fix_httpx_host(request):
+            try:
+                _ru = _hh.restore_url(str(request.url))
+                if _ru:
+                    request.url = httpx.URL(_ru)
+                    if "Host" in request.headers:
+                        del request.headers["Host"]
+                _nh = _hh.should_replace(str(request.url), request.headers.get("Host"))
+                if _nh:
+                    request.headers["Host"] = _nh
+            except Exception:
+                pass
+
         def _vl_csend(self, request, *a, **kw):
+            _fix_httpx_host(request)
             if _SCAN_CTX.get() is not None:
                 if _is_internal(str(request.url)):
                     request = _rebuild(request)
@@ -431,6 +458,7 @@ def install_transport_guards() -> None:
             return _o_csend(self, request, *a, **kw)
 
         async def _vl_asend(self, request, *a, **kw):
+            _fix_httpx_host(request)
             if _SCAN_CTX.get() is not None:
                 if _is_internal(str(request.url)):
                     request = _rebuild(request)
@@ -439,6 +467,23 @@ def install_transport_guards() -> None:
             return await _o_asend(self, request, *a, **kw)
         httpx.Client.send = _vl_csend
         httpx.AsyncClient.send = _vl_asend
+        # UNDERSCORE-HOST-V4 — httpx sends redirect hops via the internal
+        # _send_single_request, not send(); hook it so a Tomcat-style
+        # absolute redirect to the cleaned name is restored too.
+        if hasattr(httpx.Client, "_send_single_request"):
+            _o_cssr = httpx.Client._send_single_request
+
+            def _vl_cssr(self, request, *a, **kw):
+                _fix_httpx_host(request)
+                return _o_cssr(self, request, *a, **kw)
+            httpx.Client._send_single_request = _vl_cssr
+        if hasattr(httpx.AsyncClient, "_send_single_request"):
+            _o_assr = httpx.AsyncClient._send_single_request
+
+            async def _vl_assr(self, request, *a, **kw):
+                _fix_httpx_host(request)
+                return await _o_assr(self, request, *a, **kw)
+            httpx.AsyncClient._send_single_request = _vl_assr
     except Exception as e:  # httpx absent / API drift — fail open for LAB
         log.debug("httpx guard not installed: %s", e)
 
@@ -451,10 +496,47 @@ def install_transport_guards() -> None:
         _o_req = aiohttp.ClientSession._request
 
         async def _vl_request(self, method, str_or_url, *a, **kw):
+            try:
+                _hdrs = kw.get("headers")
+                _cur = None
+                if _hdrs:
+                    for _k, _v in dict(_hdrs).items():
+                        if str(_k).lower() == "host":
+                            _cur = _v
+                _ru = _hh.restore_url(str(str_or_url))
+                if _ru:
+                    str_or_url, _cur = _ru, None
+                _nh = _hh.should_replace(str(str_or_url), _cur)
+                if _nh:
+                    _new = {k: v for k, v in dict(_hdrs or {}).items() if str(k).lower() != "host"}
+                    _new["Host"] = _nh
+                    kw["headers"] = _new
+            except Exception:
+                pass
             if _SCAN_CTX.get() is not None:
                 await guard_async(str(str_or_url), _AiohttpBlocked)
             return await _o_req(self, method, str_or_url, *a, **kw)
         aiohttp.ClientSession._request = _vl_request
+        # UNDERSCORE-HOST-V4 — aiohttp follows redirects inside _request with
+        # no per-hop hook, so resolve cleaned lab names (labwebgoat) to the
+        # real container name at DNS time instead.
+        try:
+            import aiohttp.resolver as _ar
+            for _cls_name in ("ThreadedResolver", "AsyncResolver"):
+                _cls = getattr(_ar, _cls_name, None)
+                if _cls is None or getattr(_cls, "_vl_host_patched", False):
+                    continue
+                _o_resolve = _cls.resolve
+
+                def _mk(_orig):
+                    async def _vl_resolve(self, host, *a, **kw):
+                        _real = _hh._REVERSE.get(str(host).lower()) if "_" not in str(host) else None
+                        return await _orig(self, _real or host, *a, **kw)
+                    return _vl_resolve
+                _cls.resolve = _mk(_o_resolve)
+                _cls._vl_host_patched = True
+        except Exception as e:
+            log.debug("aiohttp resolver patch not installed: %s", e)
     except Exception as e:
         log.debug("aiohttp guard not installed: %s", e)
 
