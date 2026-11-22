@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import EnterpriseSettings from "./components/EnterpriseSettings";
-import { riskFromFindingsCvss, emptySev, findingsOf, sevFromFindings, sevTotal, addSev, riskFromSev, Sparkline, ColumnChart, SevDonut, RiskGauge, HBarList, MiniSev, SectionProgress, ModuleOverview, PhaseMeta, recordScan, readScans } from "./components/VlCharts";
+import { emptySev, findingsOf, sevFromFindings, sevTotal, addSev, riskFromSev, Sparkline, ColumnChart, SevDonut, RiskGauge, HBarList, MiniSev, SectionProgress, ModuleOverview, PhaseMeta, recordScan, readScans } from "./components/VlCharts";
 
 // Resolves the API base URL. Production builds (no explicit port) use same-origin so
 // requests go through the nginx proxy. Dev (CRA on :3000) defaults to localhost:8000.
@@ -4073,7 +4073,7 @@ function WebAppModule(props) {
     _recorded.current = scanStart;
     setScanEnd(Date.now());
     const _wf = synthesizeWebappFindings(allResults);
-    recordScan({module:"webapp", moduleLabel:"Web App Pentest", target, sev: sevFromFindings(_wf), risk: riskFromFindingsCvss(_wf), phases: done.length, durationMs: Date.now() - scanStart});
+    recordScan({module:"webapp", moduleLabel:"Web App Pentest", target, sev: sevFromFindings(_wf), risk: riskFromSev(sevFromFindings(_wf)), phases: done.length, durationMs: Date.now() - scanStart});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
@@ -5072,8 +5072,8 @@ function WebAppModule(props) {
               </button>
             )}
             {finished && (() => {
-              // ENTERPRISE-GRAPHICS-V1: same risk as the gauge and the Web App PDF (higher = worse)
-              const _rk = riskFromFindingsCvss(synthesizeWebappFindings(allResults));
+              // RISK-PARITY-V1: same formula as the gauge and the Web App PDF (higher = worse)
+              const _rk = riskFromSev(sevFromFindings(synthesizeWebappFindings(allResults)));
               const sc = _rk.score;
               const lb = _rk.label.replace(/\s+risk$/i, "").toUpperCase();
               const col = sc >= 80 ? "#dc2626" : sc >= 60 ? "#ea580c" : sc >= 40 ? "#ca8a04" : "#16a34a";
@@ -5133,7 +5133,7 @@ function WebAppModule(props) {
         });
         const _wf = synthesizeWebappFindings(allResults);
         const sev = sevFromFindings(_wf);
-        return <ModuleOverview risk={riskFromFindingsCvss(_wf)} total={sel.length} done={done.filter(j=>selectedPhases.has(j)).length} running={running}
+        return <ModuleOverview risk={riskFromSev(sev)} total={sel.length} done={done.filter(j=>selectedPhases.has(j)).length} running={running}
           current={curPhase >= 0 ? PHASES[curPhase].name : `${done.filter(j=>selectedPhases.has(j)).length} of ${sel.length} checks complete`} startedAt={scanStart} finishedAt={scanEnd || undefined}
           hasRun={running || finished || done.length > 0} sev={sev}
           status={[
@@ -9501,24 +9501,23 @@ function _vlDrawBrandedCover(doc, opts) {
   // Two-band: 95mm dark navy + 4mm blue accent strip
   doc.setFillColor(...DARK); doc.rect(0, 0, pageW, 95, "F");
   doc.setFillColor(...BLUE); doc.rect(0, 88, pageW, 4, "F");
-  // Shield logo top-left
+  // Shield logo top-left (PDF-POLISH-V1: proper symmetric shield)
   {
-    const sx = margin + 8, sy = 20, w = 14, h = 16;
-    doc.setFillColor(15,23,42);
-    doc.setDrawColor(59,130,246); doc.setLineWidth(0.7);
+    const cx = margin + 7, top = 11, w = 13, h = 15;
+    doc.setFillColor(30,41,59);
+    doc.setDrawColor(59,130,246); doc.setLineWidth(0.8);
     doc.lines([
-      [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
-      [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
-      [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
-    ], sx - w*0.45, sy - h*0.4, [1,1], 'FD');
-    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(59,130,246);
-    doc.text("V", sx, sy + 2, {align:"center"});
+      [w/2, -h*0.12], [w/2, h*0.12], [0, h*0.40], [-w/2, h*0.48], [-w/2, -h*0.48],
+    ], cx - w/2, top + h*0.12, [1,1], 'FD', true);
+    doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(96,165,250);
+    doc.text("V", cx, top + h*0.58, {align:"center"});
   }
-  // Wordmark + tagline
-  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
+  // Wordmark + tagline (measured so the two halves never overlap or drift)
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(241,245,249);
   doc.text("VULNUS", margin + 18, 18);
+  const _vw = doc.getTextWidth("VULNUS");
   doc.setTextColor(59,130,246);
-  doc.text("LAB", margin + 32, 18);
+  doc.text("LAB", margin + 18 + _vw + 1, 18);
   doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
   doc.text(opts.tagline || "Automated Security Assessment Platform", margin + 18, 24);
   // TARGET-PROFILE-UI-V1: customer branding (engagement profile's
@@ -9544,9 +9543,20 @@ function _vlDrawBrandedCover(doc, opts) {
       doc.text(_ascii(String(brand.company).substring(0, 48)), bx, by + 4.5, {align:"right"});
     }
   }
-  // Title block
-  doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
-  doc.text(_ascii(opts.moduleTitle || "ASSESSMENT REPORT"), pageW/2, 56, {align:"center"});
+  // Title block — PDF-POLISH-V1: shrink to fit, then wrap to two lines, never clip
+  doc.setFont("Arial","bold"); doc.setTextColor(...BLUE);
+  const _title = _ascii(opts.moduleTitle || "ASSESSMENT REPORT");
+  const _maxW = pageW - margin*2 - 8;
+  let _fs = 26;
+  doc.setFontSize(_fs);
+  while (_fs > 18 && doc.getTextWidth(_title) > _maxW) { _fs -= 1; doc.setFontSize(_fs); }
+  if (doc.getTextWidth(_title) <= _maxW) {
+    doc.text(_title, pageW/2, 56, {align:"center"});
+  } else {
+    const _ln = doc.splitTextToSize(_title, _maxW).slice(0, 2);
+    doc.text(_ln[0], pageW/2, 50, {align:"center"});
+    if (_ln[1]) doc.text(_ln[1], pageW/2, 50 + _fs*0.42, {align:"center"});
+  }
   doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(203,213,225);
   doc.text(_ascii(opts.moduleSubtitle || ""), pageW/2, 66, {align:"center"});
   // ASSESSMENT TARGET callout
@@ -14067,6 +14077,33 @@ function vlCollectReportFindings(r) {
   return {findings: _allFindings, cveClusters: _cveClusters};
 }
 
+// PDF-CONSISTENCY-V1: describe the classes of the findings ACTUALLY present
+// (by CWE, then keywords) instead of generic boilerplate examples.
+function vlFindingClassPhrase(findings, sevs) {
+  const want = new Set(sevs);
+  const order = [];
+  const add = (c) => { if (!order.includes(c)) order.push(c); };
+  const CLASSES = [
+    ["broken access control",                  ["639","284","285","862","863","269","915"], /idor|access control|authoriz|privilege/],
+    ["session and authentication weaknesses",  ["613","384","345","347","287","306","307","1004","1275","521","522","798"], /jwt|session|token|cookie|login|password/],
+    ["missing security headers",               ["693","1021","16"], /header|csp\b|clickjack|referrer|x-frame/],
+    ["weak transport encryption",              ["319","327","326"], /tls|ssl|cipher|hsts/],
+    ["vulnerable components",                  ["1104","937","1035","1395"], /cve-\d|outdated|vulnerable (library|version|component)/],
+    ["injection",                              ["89","78","79","94","22","611","918","943","90","113","1321","1336","77","74"], /inject|\bxss\b|sqli|traversal|ssrf|xxe/],
+    ["information exposure",                   ["200","209","532","538","548","530","359","312"], /exposed|disclos|sensitive|leak|listing/],
+  ];
+  (findings || []).forEach(f => {
+    if (!want.has(String(f.severity || "").toUpperCase())) return;
+    const cwe = (String(f.cwe || "").match(/CWE-(\d+)/) || [])[1];
+    const t = (String(f.name || "") + " " + String(f.detail || "") + " " + String(f.title || "")).toLowerCase();
+    const byCwe = cwe && CLASSES.find(c => c[1].includes(cwe));     // CWE is authoritative
+    const byKw  = !byCwe && CLASSES.find(c => c[2].test(t));
+    add((byCwe || byKw) ? (byCwe || byKw)[0] : "configuration weaknesses");
+  });
+  if (!order.length) return "";
+  return order.length === 1 ? order[0] : order.slice(0, -1).join(", ") + " and " + order[order.length - 1];
+}
+
 function generateUniversalVLReport(opts) {
   const target         = opts.target;
   const allResultsRaw  = opts.allResults || {};
@@ -14866,7 +14903,8 @@ function generateUniversalVLReport(opts) {
   });
   y += 6;
 
-  doc.addPage(); y = 18; drawHeader();
+  // PDF-POLISH-V1: no forced page break here — the Executive Summary flows
+  // under Document Control instead of leaving page 2 mostly blank.
 
   // ── EXECUTIVE SUMMARY ──
   {
@@ -14917,6 +14955,8 @@ function generateUniversalVLReport(opts) {
         ? String(_top3[1].detail || _top3[1].name || _top3[1].title || "").substring(0, 90)
         : "";
       const _totalReal = _findingsTotal;   // COUNT-SOURCE-V1
+      const _hiClasses = vlFindingClassPhrase(_allFindings, ["CRITICAL","HIGH"]);
+      const _loClasses = vlFindingClassPhrase(_allFindings, ["MEDIUM","LOW"]);
       const _scannerCount = Object.keys(r).length;
       // HONEST-COVERAGE-V1: scanners that actually tested the target (not
       // skipped / errored / all-skip-marker) — used for the clean-result claim.
@@ -14951,22 +14991,22 @@ function generateUniversalVLReport(opts) {
             ? `Additionally, ${_sevCount.HIGH} HIGH-severity issue(s) require patching within 7 days. ${_topName2 ? 'Notable: "' + _topName2 + '". ' : ''}These findings widen the attack surface and should be addressed in parallel with the CRITICAL remediation.`
             : `No other HIGH-severity issues were detected on this scan.`,
           _otherCount > _sevCount.HIGH
-            ? `${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s) round out the surface. These are typically hardening opportunities (cookie hygiene, server version disclosure, missing security headers) that reduce defense-in-depth depth but are not immediately exploitable on their own.`
+            ? `${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s) round out the surface. ${_loClasses ? "They cover " + _loClasses + ": hardening gaps" : "These are hardening gaps"} that reduce defense-in-depth but are not immediately exploitable on their own.`
             : `No MEDIUM or LOW findings were detected.`,
-          `Treat the CRITICAL finding as P0: schedule incident response review, contain affected endpoints, and remediate before the next public exposure window. Use the Strategic Recommendations queue (section 13) for the prioritized work plan.`
+          `Treat the CRITICAL finding as P0: schedule incident response review, contain affected endpoints, and remediate before the next public exposure window. Use the Strategic Recommendations section for the prioritized work plan.`
         );
       } else if (_sevCount.HIGH > 0) {
         _paragraphs.push(
-          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} surfaced ${_sevCount.HIGH} HIGH-severity issue(s) that require patching within 7 days under standard remediation SLAs. The most significant finding is "${_topName}". These findings reflect known-exploited attack classes (e.g. weak TLS parameters, vulnerable CVE-mapped components, or authentication weaknesses) and should be addressed before any public attacker can weaponize the exposure.`,
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} surfaced ${_sevCount.HIGH} HIGH-severity issue(s) that require patching within 7 days under standard remediation SLAs. The most significant finding is "${_topName}". ${_hiClasses ? "They fall into " + _hiClasses + ", attack classes that are routinely exploited, and" : "They"} should be addressed before an attacker can use them.`,
           _sevCount.MEDIUM + _sevCount.LOW > 0
-            ? `Beyond the HIGH-severity issues, the scan identified ${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s). These are typically hygiene gaps (cookie security flags, version-banner disclosure, missing security headers) that reduce defense-in-depth but are not standalone exploits.`
+            ? `Beyond the HIGH-severity issues, the scan identified ${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s). ${_loClasses ? "They cover " + _loClasses + ": hygiene gaps" : "These are hygiene gaps"} that reduce defense-in-depth but are not standalone exploits.`
             : `No MEDIUM or LOW findings were detected on this scan.`,
-          `Recommended next steps: address the HIGH findings via the Strategic Recommendations queue (section 13), then close the remaining items per SLA cadence. Re-scan post-remediation to capture the improvement delta.`
+          `Recommended next steps: address the HIGH findings via the Strategic Recommendations section, then close the remaining items per SLA cadence. Re-scan post-remediation to capture the improvement delta.`
         );
       } else if (_totalReal > 0) {
         _paragraphs.push(
           `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed across ${_scannerCount} scanner(s) with ${_totalReal} finding(s) at MEDIUM or LOW severity. The most notable item is "${_topName}". No CRITICAL or HIGH exposures were detected in the vulnerability classes this scan actively exercised. This is not a clean bill of health: the MEDIUM finding(s) below require remediation, and coverage is limited to the classes listed in the Scan Coverage section.`,
-          `The MEDIUM/LOW findings are typically hardening opportunities: cookie security flags, server-version disclosure, or missing security headers. Individually they may not be directly exploitable, but together they reduce defense-in-depth against client-side and credential-harvesting attacks, and should be closed per SLA.`,
+          `${_loClasses ? "The MEDIUM/LOW findings cover " + _loClasses + "." : "The MEDIUM/LOW findings are hardening opportunities."} Individually they may not be directly exploitable, but together they reduce defense-in-depth against client-side and credential-harvesting attacks, and should be closed per SLA.`,
           `Recommended next steps: address findings per SLA cadence (MEDIUM within 30 days, LOW within 90 days) and continue continuous monitoring. Schedule a re-scan on the cadence indicated in the Conclusion section to detect drift.`
         );
       } else if (_narrowClean) {
@@ -15211,31 +15251,29 @@ function generateUniversalVLReport(opts) {
           {v: _sevCount.LOW      || 0, c: SEVCOL.LOW,      l: "L"},
           {v: Math.max(0, _realInfoCount), c: SEVCOL.INFO, l: "I"},
         ];
+        // PDF-POLISH-V1: each severity is ONE filled ring-segment polygon (outer
+        // arc + inner arc), so there are no hairline seams between slivers.
         let _angU = -Math.PI / 2;
+        const _nSeg = _segsU.filter(s => s.v > 0).length;
+        const _gapU = _nSeg > 1 ? 0.035 : 0;
         _segsU.forEach(s => {
           if (s.v <= 0) return;
           const sw = (s.v / _totalFxU) * 2 * Math.PI;
-          const steps = Math.max(2, Math.ceil(sw * 18));
+          const a0 = _angU + _gapU / 2, a1 = _angU + sw - _gapU / 2;
+          const steps = Math.max(4, Math.ceil((a1 - a0) * 40));
+          const pts = [];
+          for (let i = 0; i <= steps; i++) { const a = a0 + (a1 - a0) * i / steps; pts.push([_cxU + _rU * Math.cos(a), _cyU + _rU * Math.sin(a)]); }
+          for (let i = steps; i >= 0; i--) { const a = a0 + (a1 - a0) * i / steps; pts.push([_cxU + _r2U * Math.cos(a), _cyU + _r2U * Math.sin(a)]); }
+          const rel = [];
+          for (let i = 1; i < pts.length; i++) rel.push([pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]]);
           doc.setFillColor.apply(doc, s.c);
-          for (let i = 0; i < steps; i++) {
-            const a1 = _angU + (sw * i / steps);
-            const a2 = _angU + (sw * (i + 1) / steps);
-            doc.triangle(
-              _cxU, _cyU,
-              _cxU + _rU * Math.cos(a1), _cyU + _rU * Math.sin(a1),
-              _cxU + _rU * Math.cos(a2), _cyU + _rU * Math.sin(a2),
-              'F'
-            );
-          }
+          doc.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
           _angU += sw;
         });
-        doc.setFillColor(255, 255, 255);
-        doc.circle(_cxU, _cyU, _r2U, 'F');
         doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
-        const _tStrU = String(_totalFxU);
-        doc.text(_tStrU, _cxU - (_tStrU.length * 1.4), _cyU + 1);
+        doc.text(String(_totalFxU), _cxU, _cyU + 1, {align:"center"});
         doc.setFont("Arial","normal"); doc.setFontSize(5.5); doc.setTextColor(...GRAY);
-        doc.text("findings", _cxU - 4.5, _cyU + 5);
+        doc.text("findings", _cxU, _cyU + 5, {align:"center"});
         const _legXU = margin + 50;
         const _legWU = contentW - 52;
         doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
@@ -15246,9 +15284,9 @@ function generateUniversalVLReport(opts) {
           if (s.v <= 0) return;
           const w = Math.max(2, (s.v / _totalFxU) * _legWU);
           fillR(_bXU, _barYU, w, _barHU, s.c);
-          if (w >= 14) {
+          if (w >= 4) {   // PDF-POLISH-V1: label every segment that can fit a number
             doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(255,255,255);
-            doc.text(String(s.v), _bXU + w/2 - 1, _barYU + 4.5);
+            doc.text(String(s.v), _bXU + w/2, _barYU + 4.5, {align:"center"});
           }
           _bXU += w;
         });
@@ -15395,6 +15433,44 @@ function generateUniversalVLReport(opts) {
         "CWE-1021":["6.4.3","CC6.6","A.8.23","SC-7","164.312(a)(1)","Art. 32","PR.AC-5","CIS 16.10"],
         "CWE-1275":["6.2.4","CC6.1","A.5.15","SC-23","164.312(d)","Art. 32","PR.AC-7","CIS 16.5"],
         "CWE-1395":["6.3.3","CC7.1","A.8.8","SI-2","164.308(a)(5)","Art. 32","ID.RA-1","CIS 7.1"],
+        // PDF-CONSISTENCY-V1: CWEs that were missing, so HIGH findings such as
+        // JWT expiry (CWE-613) and IDOR (CWE-639) silently dropped out of this
+        // section while §Compliance Mapping listed them.
+        "CWE-613":["8.2.8","CC6.1","A.5.16","AC-12","164.312(d)","Art. 32","PR.AC-7","CIS 6.2"],
+        "CWE-384":["8.2.8","CC6.1","A.5.16","AC-12","164.312(d)","Art. 32","PR.AC-7","CIS 6.2"],
+        "CWE-639":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-284":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-862":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-863":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-269":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-915":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-345":["8.3.1","CC6.1","A.5.17","IA-2","164.312(d)","Art. 32","PR.AC-7","CIS 6.3"],
+        "CWE-347":["8.3.1","CC6.1","A.5.17","IA-2","164.312(d)","Art. 32","PR.AC-7","CIS 6.3"],
+        "CWE-521":["8.3.6","CC6.1","A.5.17","IA-5","164.312(d)","Art. 32","PR.AC-1","CIS 5.2"],
+        "CWE-522":["8.3.6","CC6.1","A.5.17","IA-5","164.312(d)","Art. 32","PR.AC-1","CIS 5.2"],
+        "CWE-798":["8.3.6","CC6.1","A.5.17","IA-5","164.312(d)","Art. 32","PR.AC-1","CIS 5.2"],
+        "CWE-209":["3.4.1","CC6.1","A.5.10","SC-8","164.312(e)(1)","Art. 32","PR.DS-1","CIS 3.3"],
+        "CWE-532":["3.4.1","CC6.1","A.5.10","SC-8","164.312(e)(1)","Art. 32","PR.DS-1","CIS 3.3"],
+        "CWE-359":["3.4.1","CC6.1","A.5.10","SC-8","164.312(e)(1)","Art. 32","PR.DS-1","CIS 3.3"],
+        "CWE-312":["3.4.1","CC6.1","A.5.10","SC-8","164.312(e)(1)","Art. 32","PR.DS-1","CIS 3.3"],
+        "CWE-548":["2.2.7","CC6.1","A.5.10","AC-6","164.312(a)(1)","Art. 25","PR.AC-4","CIS 3.7"],
+        "CWE-530":["2.2.7","CC6.1","A.5.10","AC-6","164.312(a)(1)","Art. 25","PR.AC-4","CIS 3.7"],
+        "CWE-525":["2.2.7","CC6.1","A.5.10","AC-6","164.312(a)(1)","Art. 25","PR.AC-4","CIS 3.7"],
+        "CWE-524":["2.2.7","CC6.1","A.5.10","AC-6","164.312(a)(1)","Art. 25","PR.AC-4","CIS 3.7"],
+        "CWE-16":["6.3.3","CC7.1","A.8.8","SI-2","164.308(a)(5)","Art. 32","ID.RA-1","CIS 7.1"],
+        "CWE-1104":["6.3.3","CC7.1","A.8.8","SI-2","164.308(a)(5)","Art. 32","ID.RA-1","CIS 7.1"],
+        "CWE-937":["6.3.3","CC7.1","A.8.8","SI-2","164.308(a)(5)","Art. 32","ID.RA-1","CIS 7.1"],
+        "CWE-1035":["6.3.3","CC7.1","A.8.8","SI-2","164.308(a)(5)","Art. 32","ID.RA-1","CIS 7.1"],
+        "CWE-74":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-77":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-90":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-113":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-434":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-444":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-502":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-943":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-1321":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-1336":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
       };
       const _FW_W = [
         {n:"PCI-DSS v4.0",            b:"Payment Card Industry"},
@@ -15465,8 +15541,11 @@ function generateUniversalVLReport(opts) {
             doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor.apply(doc, sFg);
             doc.text(sev, margin+43, y+3.2, {align:"center"});
             doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor.apply(doc, GRAY);
-            const nm = String(top.name||top.detail||top.title||"finding").substring(0, 90);
-            doc.text(`${fs.length} finding(s) - top: ${nm}`, margin+52, y+3.5);
+            // PDF-POLISH-V1: fit the line to the row width with an ellipsis
+            let _ln = _ascii(`${fs.length} finding(s) - top: ${String(top.name||top.detail||top.title||"finding")}`);
+            const _lw = contentW - 54;
+            if (doc.getTextWidth(_ln) > _lw) { while (_ln.length > 10 && doc.getTextWidth(_ln + "...") > _lw) _ln = _ln.slice(0, -1); _ln = _ln.replace(/\s+\S*$/, "") + "..."; }
+            doc.text(_ln, margin+52, y+3.5);
             y += 5;
           });
           y += 2;
@@ -15481,13 +15560,19 @@ function generateUniversalVLReport(opts) {
         chk(13);
         const sev = String(f.severity||"INFO").toUpperCase();
         const col = SEVCOL[sev] || SEVCOL.INFO;
-        fillR(margin, y, 4, 10, col);
-        fillR(margin + 4, y, contentW - 4, 10, LIGHT);
+        // PDF-POLISH-V1: wrap long titles onto a second line instead of cutting mid-word
+        const nmFull = String(f.detail||f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||"Untitled finding");
+        doc.setFont("Arial","bold"); doc.setFontSize(8.5);
+        let nmLines = doc.splitTextToSize(_ascii(nmFull), contentW - 15 - 26);
+        if (nmLines.length > 2) { nmLines = nmLines.slice(0, 2); nmLines[1] = nmLines[1].replace(/\s*\S*$/, "") + "..."; }
+        const bh = nmLines.length > 1 ? 14 : 10;
+        chk(bh + 3);
+        fillR(margin, y, 4, bh, col);
+        fillR(margin + 4, y, contentW - 4, bh, LIGHT);
         txt(`${idx+1}.`, margin + 8, y + 6.8, 9, col, true);
-        const nm = String(f.detail||f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||"Untitled finding").substring(0,85);
-        txt(nm, margin + 15, y + 6.8, 8.5, DARK, true);
+        nmLines.forEach((ln, li) => txt(ln, margin + 15, y + 6.8 + li * 4, 8.5, DARK, true));
         txt(sev, margin + contentW - 20, y + 6.8, 7, col, true);
-        y += 12;
+        y += bh + 2;
       });
       y += 4;
     }
@@ -15603,6 +15688,11 @@ function generateUniversalVLReport(opts) {
       });
     if (_allSkipInfo) return {...p, status:"SKIPPED", detail: String((d.findings[0] && (d.findings[0].name || d.findings[0].evidence)) || "probe could not run").substring(0,90)};
     if (p.isEmpty(d)) return {...p, status:"EMPTY", detail:"Ran cleanly - no findings"};
+    // PDF-CONSISTENCY-V1: a scanner that only reported passed checks (POSITIVE)
+    // tested the target and found nothing - count it as CLEAN, exactly like the
+    // Per-Tool Intelligence "confirmed clean" list below.
+    if (d.findings.every(f => ["POSITIVE","PASS"].includes(String(f.severity||"").toUpperCase())))
+      return {...p, status:"EMPTY", detail:"Ran cleanly - checks passed"};
     return {...p, status:"RAN", detail:`${d.findings.length} finding(s)`};
   });
   const _cnt = s => _coverageRows.filter(p => p.status === s).length;
@@ -15847,8 +15937,12 @@ function generateUniversalVLReport(opts) {
         // Reverted from coloured framework pills (commit dc224eca) per user
         // 2026-06-09 - pills on every row were visually noisy. The colour-coded
         // identification of frameworks lives in the top-of-report coverage bar.
-        var cmpLines = doc.splitTextToSize(ob.cmp, 58).slice(0, 2);
-        var nmLines  = doc.splitTextToSize(ob.nm, 66).slice(0, 2);
+        // PDF-POLISH-V1: measure in the drawing font; up to 3 lines, ellipsis on overflow
+        var _clip = function(arr, n){ if (arr.length <= n) return arr; var o = arr.slice(0, n); o[n-1] = o[n-1].replace(/\s*\S*$/, "") + "..."; return o; };
+        doc.setFont("Arial","normal"); doc.setFontSize(6.8);
+        var cmpLines = _clip(doc.splitTextToSize(_ascii(ob.cmp), 60), 3);
+        doc.setFontSize(7);
+        var nmLines  = _clip(doc.splitTextToSize(_ascii(ob.nm), 64), 3);
         var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(cmpLines.length, nmLines.length));
         chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
         cmpLines.forEach(function(ln, li){
@@ -16137,8 +16231,12 @@ function generateUniversalVLReport(opts) {
         const nmWithSrc = nm + _srcLbl;
         // Wrap finding name to 2 lines max instead of hard ...-truncating
         // (pdf_industry_standard.md gap 12). Row height grows with name lines.
-        const _nmLines = doc.splitTextToSize(nmWithSrc, 96).slice(0, 2);
-        const _topRowH = Math.max(7, 1.5 + (_nmLines.length * 3.4));
+        // PDF-POLISH-V1: measure with the font actually used to draw the name, and
+        // leave room under a 2-line name so it never collides with the Asset line.
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5);
+        let _nmLines = doc.splitTextToSize(_ascii(nmWithSrc), 96);
+        if (_nmLines.length > 2) { _nmLines = _nmLines.slice(0, 2); _nmLines[1] = _nmLines[1].replace(/\s*\S*$/, "") + "..."; }
+        const _topRowH = _nmLines.length > 1 ? 10.6 : 7;
         const _rh = _topRowH + 7;   // top rows + meta + reproduce
         chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
         // Top row (finding name spans up to 2 lines on the left)
@@ -16205,7 +16303,10 @@ function generateUniversalVLReport(opts) {
     };
     const _positiveOnly = _toolsForPanels.filter(k => _isPosOnly(r[k]));
     const _scaffoldOnly = _toolsForPanels.filter(k => _isScaffoldOnly(r[k]));
-    const _collapsePos = _positiveOnly.length >= 5;
+    // PDF-CONSISTENCY-V1: the clean list shows EVERY scanner Scan Coverage counts
+    // as CLEAN (empty + passed-checks-only), so the two numbers always match.
+    const _cleanAll = _coverageRows.filter(p => p.status === "EMPTY").map(p => p.tool);
+    const _collapsePos = _positiveOnly.length > 0 || _cleanAll.length > 0;
     const _collapseScaffold = _scaffoldOnly.length >= 5;
     const _hiddenSet = new Set([
       ...(_collapsePos ? _positiveOnly : []),
@@ -16221,10 +16322,10 @@ function generateUniversalVLReport(opts) {
       // Full per-scanner PASS detail with evidence is rendered in the
       // Appendix "D. POSITIVE-only scanner audit log" further down.
       chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
-      txt(`${_positiveOnly.length} scanners ran and confirmed clean (no exposure). Listed below for scanner-coverage audit.`,
+      txt(`${_cleanAll.length} scanners ran and confirmed clean (no exposure). Listed below for scanner-coverage audit.`,
           margin + 6, y + 4.2, 7.5, [15,118,82], true);
       y += 9;
-      const _posNames = _positiveOnly.slice().sort().map(_prettyName);
+      const _posNames = _cleanAll.slice().sort().map(_prettyName);
       const _posCols = 3;
       const _posColW = (contentW - 4) / _posCols;
       for (let _i = 0; _i < _posNames.length; _i += _posCols) {
@@ -16501,17 +16602,24 @@ function generateUniversalVLReport(opts) {
         _curSev = sev;
       }
       _recN++;
-      const nm = String(f.detail||f.name||f.title||"Untitled finding").substring(0, 100);
-      const rem = String(f.remediation || "See per-finding section above for evidence and remediation guidance.").substring(0, 200);
+      // PDF-POLISH-V1: wrap the title (max 2 lines) and measure text with the
+      // same font it is drawn in, so nothing is cut mid-word.
+      const nm = String(f.detail||f.name||f.title||"Untitled finding");
+      const rem = String(f.remediation || "See per-finding section above for evidence and remediation guidance.").substring(0, 300);
+      doc.setFont("Arial","bold"); doc.setFontSize(8.5);
+      let _nmL = doc.splitTextToSize(_ascii(nm), contentW - 17 - 24);
+      if (_nmL.length > 2) { _nmL = _nmL.slice(0, 2); _nmL[1] = _nmL[1].replace(/\s*\S*$/, "") + "..."; }
+      doc.setFont("Arial","normal"); doc.setFontSize(7);
       const _remLines = doc.splitTextToSize(_ascii("Fix: " + rem), contentW - 16);
-      const _cardH = Math.max(13, 6 + _remLines.length * 3.6 + 3);
+      const _titleH = _nmL.length * 4;
+      const _cardH = Math.max(13, 5 + _titleH + _remLines.length * 3.6 + 2);
       chk(_cardH + 2);
       fillR(margin, y, 3, _cardH, col);
       fillR(margin + 3, y, contentW - 3, _cardH, LIGHT);
       txt(`#${_recN}`, margin + 7, y + 5, 8, col, true);
-      txt(_ascii(nm), margin + 17, y + 5, 8.5, DARK, true);
+      _nmL.forEach((ln, li) => txt(ln, margin + 17, y + 5 + li * 4, 8.5, DARK, true));
       txt(sev, margin + contentW - 18, y + 5, 7, col, true);
-      _remLines.forEach((ln, li) => txt(ln, margin + 7, y + 9.5 + (li * 3.6), 7, GRAY));
+      _remLines.forEach((ln, li) => txt(ln, margin + 7, y + 5.5 + _titleH + (li * 3.6), 7, GRAY));
       y += _cardH + 1;
     });
 
@@ -16698,12 +16806,21 @@ function generateUniversalVLReport(opts) {
   }
 
   // End block
-  if (y + 30 > 284) { doc.addPage(); y = 18; drawHeader(); }
-  fillR(margin, y + 5, contentW, 28, LBLUE);
-  fillR(margin, y + 5, 3, 28, BLUE);
-  txt(`- END OF ${moduleLabel.toUpperCase()} REPORT -`, pageW/2, y + 13, 10, BLUE, true, "center");
-  txt(`Generated by VulnusLab - ${moduleLabel} module.`, pageW/2, y + 18, 6.5, GRAY, false, "center");
-  txt("vulnuslab.com - support@vulnuslab.com", pageW/2, y + 27, 7, BLUE, true, "center");
+  // PDF-POLISH-V1: never spend a whole page on the closing box - fall back to a
+  // compact one-band version when the full box doesn't fit.
+  if (y + 34 <= 284) {
+    fillR(margin, y + 5, contentW, 28, LBLUE);
+    fillR(margin, y + 5, 3, 28, BLUE);
+    txt(`- END OF ${moduleLabel.toUpperCase()} REPORT -`, pageW/2, y + 13, 10, BLUE, true, "center");
+    txt(`Generated by VulnusLab - ${moduleLabel} module.`, pageW/2, y + 18, 6.5, GRAY, false, "center");
+    txt("vulnuslab.com - support@vulnuslab.com", pageW/2, y + 27, 7, BLUE, true, "center");
+  } else {
+    y = Math.max(18, y - 4);   // tighten the gap left by the previous section
+    if (y + 9 > 283) { doc.addPage(); y = 18; drawHeader(); }
+    fillR(margin, y, contentW, 8, LBLUE);
+    fillR(margin, y, 3, 8, BLUE);
+    txt(`- END OF ${moduleLabel.toUpperCase()} REPORT -  vulnuslab.com - support@vulnuslab.com`, pageW/2, y + 5.3, 7.5, BLUE, true, "center");
+  }
 
   // ── BORDER + WATERMARK + FOOTER ON EVERY PAGE ──
   // Bug 1 parity fix: previously this generator skipped the diagonal

@@ -44,21 +44,9 @@ export function riskFromSev(c) {
   const maxC = c.CRITICAL > 0 ? 30 : c.HIGH > 0 ? 22 : c.MEDIUM > 0 ? 12 : 5;
   const score = Math.round(Math.min(100, Math.max(5, Math.min(70, raw) + maxC)));
   const label = (score >= 80 && c.CRITICAL > 0) ? "Critical risk" : score >= 60 ? "High risk" : score >= 40 ? "Moderate risk" : score >= 20 ? "Low risk" : "Minimal risk";
-  const color = score >= 70 ? "#ef4444" : score >= 40 ? "#eab308" : "#22c55e";
+  // RISK-PARITY-V1: colour bands match the PDF (60-80 HIGH, 80-100 CRITICAL)
+  const color = score >= 80 ? "#ef4444" : score >= 60 ? "#f97316" : score >= 40 ? "#eab308" : "#22c55e";
   return { score, label, color };
-}
-
-/** Web-app PDF risk formula (CVSS-based, same as the Web App report). */
-export function riskFromFindingsCvss(findings) {
-  const real = (findings || []).filter(f => f && ["CRITICAL", "HIGH", "MEDIUM", "LOW"].includes(String(f.severity).toUpperCase()));
-  const lab = (score) => score >= 80 ? "Critical risk" : score >= 60 ? "High risk" : score >= 40 ? "Moderate risk" : score >= 20 ? "Low risk" : "Minimal risk";
-  const col = (score) => score >= 70 ? "#ef4444" : score >= 40 ? "#eab308" : "#22c55e";
-  if (!real.length) return { score: 5, label: lab(5), color: col(5) };
-  const cv = f => { const c = parseFloat(f.cvss || "0"); return c > 0 ? c : ({ CRITICAL: 9.0, HIGH: 7.5, MEDIUM: 5.0, LOW: 3.0 }[String(f.severity).toUpperCase()] || 0); };
-  let sum = 0, max = 0;
-  real.forEach(f => { const c = cv(f); sum += c; if (c > max) max = c; });
-  const score = Math.round(Math.min(100, Math.max(5, Math.min(70, sum * 2.5) + Math.min(30, max * 3))));
-  return { score, label: lab(score), color: col(score) };
 }
 
 export const fmtDur = (ms) => {
