@@ -4014,6 +4014,7 @@ function WebAppModule(props) {
     vlAuthSave(t, cookie || "", bearer || "");
   };
   const [showAuthPanel, setShowAuthPanel]   = useState(false);
+  const [showManualAuth, setShowManualAuth] = useState(false);  // SETUP-TIDY-V2: manual cookie/token hidden until asked for
   // ── Auto-login fields. When the user fills these in and clicks the
   // "Auto-login" button, we POST to /api/scan/login, capture the session
   // cookie, and stash it in authCookie so every downstream scanner uses
@@ -5005,19 +5006,28 @@ function WebAppModule(props) {
                     {(autoLoginStatus && !autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"var(--t-f87171, #f87171)",fontWeight:600}}>{autoLoginStatus}</span>}
                   </div>
                 </div>
-                <div style={{fontSize:10,color:"var(--dim)",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                  <div style={{flex:1,minWidth:240}}>
-                    <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                    <input value={authCookie} onChange={e=>{_setScopedAuth(target, e.target.value, authBearer);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                  </div>
-                  <div style={{flex:1,minWidth:240}}>
-                    <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Bearer Token</div>
-                    <input value={authBearer} onChange={e=>{_setScopedAuth(target, authCookie, e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                  </div>
-                </div>
-                {(authCookie||authBearer) && (
-                  <button onClick={()=>{_setScopedAuth(target, "", "");setAutoLoginStatus(null);}} style={{alignSelf:"flex-start",background:"var(--border)",border:"1px solid var(--border2)",borderRadius:4,padding:"4px 10px",color:"var(--t-ef4444, #ef4444)",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
+                {/* SETUP-TIDY-V2: manual cookie/token hidden behind a small link */}
+                {!(showManualAuth || authCookie || authBearer) ? (
+                  <button onClick={()=>setShowManualAuth(true)} style={{alignSelf:"center",background:"transparent",border:"none",color:"var(--t-60a5fa, #60a5fa)",fontSize:11,cursor:"pointer",fontWeight:600,textDecoration:"underline",padding:"2px 0"}}>
+                    Already have a cookie or token? Paste it instead
+                  </button>
+                ) : (
+                  <>
+                    <div style={{fontSize:10,color:"var(--dim)",textAlign:"center"}}>— paste a session cookie or bearer token —</div>
+                    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                      <div style={{flex:1,minWidth:240}}>
+                        <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                        <input value={authCookie} onChange={e=>{_setScopedAuth(target, e.target.value, authBearer);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                      </div>
+                      <div style={{flex:1,minWidth:240}}>
+                        <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Bearer Token</div>
+                        <input value={authBearer} onChange={e=>{_setScopedAuth(target, authCookie, e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:5,padding:"8px 11px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                      </div>
+                    </div>
+                    {(authCookie||authBearer) && (
+                      <button onClick={()=>{_setScopedAuth(target, "", "");setAutoLoginStatus(null);}} style={{alignSelf:"flex-start",background:"var(--border)",border:"1px solid var(--border2)",borderRadius:4,padding:"4px 10px",color:"var(--t-ef4444, #ef4444)",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -12787,6 +12797,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
   const [selectedPhases, setSelected] = useState(() => new Set(RECON_PHASES.map((_,i)=>i)));
   // RECON-AUTH-STATE-V1
   const [authOpen,setAuthOpen]                   = useState(false);
+  const [rShowManualAuth,setRShowManualAuth]      = useState(false);  // SETUP-TIDY-V2
   const [loginUrl,setLoginUrl]                   = useState("");
   const [loginUser,setLoginUser]                 = useState("");
   const [loginPass,setLoginPass]                 = useState("");
@@ -13596,7 +13607,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   )}
                 </div>
               </div>
-              <div style={{fontSize:10,color:"var(--dim)",textAlign:"center",margin:"2px 0"}}>— OR paste cookie / bearer manually —</div>
+              {/* SETUP-TIDY-V2: manual cookie/token hidden behind a small link */}
+              {!(rShowManualAuth || authCookie || authBearer) ? (
+                <button onClick={()=>setRShowManualAuth(true)} style={{alignSelf:"center",background:"transparent",border:"none",color:"var(--t-60a5fa, #60a5fa)",fontSize:11,cursor:"pointer",fontWeight:600,textDecoration:"underline",padding:"2px 0"}}>
+                  Already have a cookie or token? Paste it instead
+                </button>
+              ) : (<>
+              <div style={{fontSize:10,color:"var(--dim)",textAlign:"center",margin:"2px 0"}}>— paste a session cookie or bearer token —</div>
               <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                 <div style={{flex:1,minWidth:240}}>
                   <div style={{fontSize:10,color:"var(--dim)",marginBottom:3,fontWeight:600}}>Session Cookie</div>
@@ -13617,6 +13634,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   Clear auth credentials
                 </button>
               )}
+              </>)}
               <div style={{fontSize:10,color:"var(--dim)",marginTop:2}}>
                 Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
               </div>
