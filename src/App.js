@@ -723,7 +723,8 @@ function _applyScanConsent(body) {
 // SCAN-AUTHZ-V1 — operator authorization gate shown in every scan panel. Writes
 // the acknowledgment to localStorage; _applyScanConsent reads it onto each scan
 // request body, and the backend enforces + logs it for non-lab targets.
-function ScanAuthConsent() {
+function ScanAuthConsent({ variant = "both" } = {}) {
+  // SETUP-STEPS-V1: variant "ack" = authorization only, "profile" = engagement profile only, "both" = default
   const [ack, setAck] = useState(() => { try { return localStorage.getItem("vlScanAuthAck") === "true"; } catch (_) { return false; } });
   const [scope, setScope] = useState(() => { try { return localStorage.getItem("vlScanAuthScope") || ""; } catch (_) { return ""; } });
   const write = (v) => { try { localStorage.setItem("vlScanAuthAck", v ? "true" : "false"); } catch (_) {} };
@@ -762,7 +763,7 @@ function ScanAuthConsent() {
   const selStyle = {background:"var(--surface2)",border:"1px solid var(--bd-blue)",borderRadius:4,padding:"5px 8px",color:"var(--text)",fontSize:11,outline:"none",maxWidth:"100%"};
   return (
     <div style={{margin:"10px 0",padding:"9px 11px",background:covered?"var(--tint-green)":"var(--surface2)",border:"1px solid "+(covered?"var(--bd-green)":"var(--bd-orange)"),borderRadius:6}}>
-      <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:active?6:8,fontSize:11,color:"var(--text)"}}>
+      {variant !== "ack" && <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:active?6:8,fontSize:11,color:"var(--text)"}}>
         <b style={{color:"var(--t-93c5fd, #93c5fd)"}}>Engagement profile</b>
         <select value={active ? active.id : ""} onChange={e=>pickProfile(e.target.value)} style={selStyle}>
           <option value="">None — lab / ad-hoc scan (per-scan acknowledgment)</option>
@@ -776,8 +777,8 @@ function ScanAuthConsent() {
           </select>
         )}
         {loadErr && <span style={{color:"var(--t-fca5a5, #fca5a5)"}}>profiles unavailable: {loadErr}</span>}
-      </div>
-      {active && (
+      </div>}
+      {variant !== "ack" && active && (
         <div style={{fontSize:11,lineHeight:1.5,color:covered?"var(--t-86efac, #86efac)":"var(--t-fdba74, #fdba74)",marginBottom:covered?0:8}}>
           {covered
             ? <>Consent covered by the profile's signed authorization — {active.signer} ({active.signer_company}), signed {active.signed_date}. Scope, rate limit, time window{active.destructive_allowed ? "" : " and no-destructive-tests"} are enforced server-side; out-of-scope targets are refused.</>
@@ -785,11 +786,11 @@ function ScanAuthConsent() {
           {active.targets && active.targets.length > 0 && <div style={{color:"var(--muted)"}}>In-scope primary targets: {active.targets.join(", ")}</div>}
         </div>
       )}
-      {!covered && <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"var(--t-86efac, #86efac)":"var(--t-fdba74, #fdba74)",lineHeight:1.4}}>
+      {variant !== "profile" && !covered && <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"var(--t-86efac, #86efac)":"var(--t-fdba74, #fdba74)",lineHeight:1.4}}>
         <input type="checkbox" checked={ack} onChange={e=>{const v=e.target.checked; setAck(v); write(v);}} style={{marginTop:2}}/>
         <span><b>Authorization</b> — I own this target or have written permission to test it. Scanning systems without authorization is illegal; this acknowledgment is logged. Practice labs (lab_*) are exempt.</span>
       </label>}
-      {!covered && ack && (
+      {variant !== "profile" && !covered && ack && (
         <input value={scope} onChange={e=>{setScope(e.target.value); writeScope(e.target.value);}} placeholder="Authorization reference (ticket / contract / asset owner) — optional" style={{marginTop:7,width:"100%",background:"var(--surface)",border:"1px solid var(--bd-orange)",borderRadius:4,padding:"6px 9px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
       )}
     </div>
@@ -4015,6 +4016,7 @@ function WebAppModule(props) {
   };
   const [showAuthPanel, setShowAuthPanel]   = useState(false);
   const [showManualAuth, setShowManualAuth] = useState(false);  // SETUP-TIDY-V2: manual cookie/token hidden until asked for
+  const [showWapAdvanced, setShowWapAdvanced] = useState(false);  // SETUP-STEPS-V1
   // ── Auto-login fields. When the user fills these in and clicks the
   // "Auto-login" button, we POST to /api/scan/login, capture the session
   // cookie, and stash it in authCookie so every downstream scanner uses
@@ -4960,6 +4962,121 @@ function WebAppModule(props) {
         {/* Target input row */}
         <div style={{marginTop:8}}>
 
+          {/* SETUP-STEPS-V1 — step-by-step web app setup */}
+          <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 6px"}}>
+            <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
+            <span style={{fontSize:14,fontWeight:600,color:"var(--heading)",flex:1}}>Enter your target</span>
+          {/* SETUP-TIDY-V1: the target label + history now sit directly above the input */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:4,padding:"2px 8px",color:"var(--t-60a5fa, #60a5fa)",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
+          </div>
+          {showHistory && targetHistory.length>0 && !running && (
+            <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
+              {targetHistory.map((t,i)=>(
+                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--t-93c5fd, #93c5fd)",fontFamily:"var(--font-mono)"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <span style={{color:"var(--border2)",fontSize:10}}>{i+1}</span>{t}
+                </div>
+              ))}
+            </div>
+          )}          </div>
+            {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
+                real target field alone. Combined with autoComplete="off" +
+                a non-standard name + data-form-type="other" this kills the
+                "Chrome puts the user's ADMIN username in the target field"
+                annoyance for good. */}
+            <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+            <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+                      <input value={target} onChange={e=>setTarget(e.target.value)}
+              placeholder="example.com  or  http://192.168.1.1:8080"
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
+              style={{width:"100%",boxSizing:"border-box",background:"var(--bg)",border:"1px solid "+(running?"#3b82f6":"var(--nav-active)"),borderRadius:8,padding:"13px 16px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:15,outline:"none",transition:"border-color 0.2s"}}/>
+                      {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
+              <div style={{background:"var(--tint-orange)",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"var(--t-fb923c, #fb923c)",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+                Auth required — click the target button to auto-login first
+              </div>
+            )}
+          <div style={{fontSize:12,color:"var(--dim)",margin:"6px 0 16px"}}>The website or app you want to test, e.g. example.com or http://192.168.1.1:8080. You must own it or have written permission. Or pick a practice target above.</div>
+
+          <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 6px"}}>
+            <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>2</span>
+            <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Confirm you're authorized</span>
+          </div>
+          <ScanAuthConsent variant="ack" />
+
+          <div style={{display:"flex",alignItems:"center",gap:8,margin:"12px 0 6px"}}>
+            <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
+            <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Start the scan</span>
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+            {!running ? (
+              <button onClick={run} disabled={!target.trim()}
+                style={{background:target.trim()?"var(--accent)":"var(--border)",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"var(--dim)",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+                ▶ Start Full Pentest
+              </button>
+            ) : (
+              <button disabled style={{background:"var(--surface)",border:"1px solid #3b82f6",borderRadius:6,padding:"11px 24px",color:"var(--t-60a5fa, #60a5fa)",fontSize:13,fontWeight:700,cursor:"not-allowed",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+                <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+                Scanning...
+              </button>
+            )}
+            {running && (
+              <button onClick={stop} disabled={stopped}
+                style={{background:"#dc2626",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
+                ■ Stop Scan
+              </button>
+            )}
+            {finished && (() => {
+              // RISK-PARITY-V1: same formula as the gauge and the Web App PDF (higher = worse)
+              const _rk = riskFromSev(sevFromFindings(synthesizeWebappFindings(allResults)));
+              const sc = _rk.score;
+              const lb = _rk.label.replace(/\s+risk$/i, "").toUpperCase();
+              const col = sc >= 80 ? "#dc2626" : sc >= 60 ? "#ea580c" : sc >= 40 ? "#ca8a04" : "#16a34a";
+              return <>
+                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
+                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Result(pdf)</button>
+                <div style={{position:"relative"}}>
+                  <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:6,padding:"11px 16px",color:"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                    Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
+                  </button>
+                  {showExportMenu && (
+                    <>
+                      <div onClick={()=>setShowExportMenu(false)} style={{position:"fixed",inset:0,zIndex:50}}/>
+                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:6,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",zIndex:51,overflow:"hidden"}}>
+                        <button onClick={()=>{setShowExportMenu(false);dlCSV();}}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"var(--heading)",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid var(--border)"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>CSV</span>
+                          <span style={{fontSize:10,color:"var(--dim)"}}>spreadsheet</span>
+                        </button>
+                        <button onClick={()=>{setShowExportMenu(false);dlJSON();}}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"var(--heading)",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid var(--border)"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>JSON</span>
+                          <span style={{fontSize:10,color:"var(--dim)"}}>API / scripts</span>
+                        </button>
+                        <button onClick={()=>{setShowExportMenu(false);dlSARIF();}}
+                          title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible"
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"var(--heading)",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>SARIF</span>
+                          <span style={{fontSize:10,color:"var(--dim)"}}>GitHub / SIEM</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>;
+            })()}
+          </div>
+
+          <button onClick={()=>setShowWapAdvanced(o=>!o)}
+            style={{marginTop:16,background:"transparent",border:"none",color:"var(--muted)",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"6px 0"}}>
+            <span>{showWapAdvanced?"\u25be":"\u25b8"}</span> Advanced options (optional) — log in first, engagement profile
+          </button>
+          {showWapAdvanced && (
+            <div style={{marginTop:4}}>
           {/* WAP-AUTH-PANEL-V5 — compact Recon-style */}
           <div style={{marginBottom:10,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6}}>
             <div onClick={()=>setShowAuthPanel(o=>!o)} style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
@@ -5032,100 +5149,9 @@ function WebAppModule(props) {
               </div>
             )}
           </div>
-          <ScanAuthConsent />
-          {/* SETUP-TIDY-V1: the target label + history now sit directly above the input */}
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-            <label style={{fontSize:11,color:"var(--dim)",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
-            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:4,padding:"2px 8px",color:"var(--t-60a5fa, #60a5fa)",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
-          </div>
-          {showHistory && targetHistory.length>0 && !running && (
-            <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
-              {targetHistory.map((t,i)=>(
-                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--t-93c5fd, #93c5fd)",fontFamily:"var(--font-mono)"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <span style={{color:"var(--border2)",fontSize:10}}>{i+1}</span>{t}
-                </div>
-              ))}
+              <ScanAuthConsent variant="profile" />
             </div>
           )}
-          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
-                real target field alone. Combined with autoComplete="off" +
-                a non-standard name + data-form-type="other" this kills the
-                "Chrome puts the user's ADMIN username in the target field"
-                annoyance for good. */}
-            <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
-            <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
-            <input value={target} onChange={e=>setTarget(e.target.value)}
-              placeholder="example.com  or  http://192.168.1.1:8080"
-              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
-              name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
-              style={{flex:3,minWidth:220,background:"var(--bg)",border:"1px solid "+(running?"#3b82f6":"var(--nav-active)"),borderRadius:6,padding:"11px 14px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
-            {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
-              <div style={{background:"var(--tint-orange)",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"var(--t-fb923c, #fb923c)",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
-                Auth required — click the target button to auto-login first
-              </div>
-            )}
-            {!running ? (
-              <button onClick={run} disabled={!target.trim()}
-                style={{background:target.trim()?"var(--accent)":"var(--border)",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"var(--dim)",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
-                ▶ Start Full Pentest
-              </button>
-            ) : (
-              <button disabled style={{background:"var(--surface)",border:"1px solid #3b82f6",borderRadius:6,padding:"11px 24px",color:"var(--t-60a5fa, #60a5fa)",fontSize:13,fontWeight:700,cursor:"not-allowed",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
-                <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
-                Scanning...
-              </button>
-            )}
-            {running && (
-              <button onClick={stop} disabled={stopped}
-                style={{background:"#dc2626",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
-                ■ Stop Scan
-              </button>
-            )}
-            {finished && (() => {
-              // RISK-PARITY-V1: same formula as the gauge and the Web App PDF (higher = worse)
-              const _rk = riskFromSev(sevFromFindings(synthesizeWebappFindings(allResults)));
-              const sc = _rk.score;
-              const lb = _rk.label.replace(/\s+risk$/i, "").toUpperCase();
-              const col = sc >= 80 ? "#dc2626" : sc >= 60 ? "#ea580c" : sc >= 40 ? "#ca8a04" : "#16a34a";
-              return <>
-                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
-                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Result(pdf)</button>
-                <div style={{position:"relative"}}>
-                  <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:6,padding:"11px 16px",color:"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
-                    Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
-                  </button>
-                  {showExportMenu && (
-                    <>
-                      <div onClick={()=>setShowExportMenu(false)} style={{position:"fixed",inset:0,zIndex:50}}/>
-                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:6,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",zIndex:51,overflow:"hidden"}}>
-                        <button onClick={()=>{setShowExportMenu(false);dlCSV();}}
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"var(--heading)",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid var(--border)"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                          <span>CSV</span>
-                          <span style={{fontSize:10,color:"var(--dim)"}}>spreadsheet</span>
-                        </button>
-                        <button onClick={()=>{setShowExportMenu(false);dlJSON();}}
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"var(--heading)",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid var(--border)"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                          <span>JSON</span>
-                          <span style={{fontSize:10,color:"var(--dim)"}}>API / scripts</span>
-                        </button>
-                        <button onClick={()=>{setShowExportMenu(false);dlSARIF();}}
-                          title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible"
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"var(--heading)",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                          <span>SARIF</span>
-                          <span style={{fontSize:10,color:"var(--dim)"}}>GitHub / SIEM</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </>;
-            })()}
-          </div>
         </div>
       </div>
 
@@ -12798,6 +12824,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
   // RECON-AUTH-STATE-V1
   const [authOpen,setAuthOpen]                   = useState(false);
   const [rShowManualAuth,setRShowManualAuth]      = useState(false);  // SETUP-TIDY-V2
+  const [rShowAdvanced,setRShowAdvanced]          = useState(false);  // SETUP-STEPS-V1
   const [loginUrl,setLoginUrl]                   = useState("");
   const [loginUser,setLoginUser]                 = useState("");
   const [loginPass,setLoginPass]                 = useState("");
@@ -13527,6 +13554,46 @@ function ReconModule({token, onRunningChange, activeSections}) {
           {icon:"",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"Node/Express + /rest/* API + JS bundle. admin@juice-sh.op/admin123", lab:"juiceshop"},
           {icon:"",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
+        {/* SETUP-STEPS-V1 — step-by-step recon setup */}
+        <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 6px"}}>
+          <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
+          <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Enter your target</span>
+        </div>
+        <input value={target} onChange={e=>setTarget(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&!running&&run()}
+          placeholder="example.com   or   192.168.1.1   or   192.168.1.0/24"
+          style={{width:"100%",boxSizing:"border-box",background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:8,padding:"13px 16px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:15,outline:"none"}}/>
+        <div style={{fontSize:12,color:"var(--dim)",margin:"6px 0 16px"}}>A website, domain, or IP address you own or have written permission to test. Or pick one of the practice targets above.</div>
+
+        <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 6px"}}>
+          <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>2</span>
+          <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Confirm you're authorized</span>
+        </div>
+        <ScanAuthConsent variant="ack" />
+
+        <div style={{display:"flex",alignItems:"center",gap:8,margin:"12px 0 6px"}}>
+          <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
+          <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Start the scan</span>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <button onClick={run} disabled={running||!target.trim()}
+            style={{background:(running||!target.trim())?"var(--border)":"var(--accent)",border:"none",borderRadius:8,padding:"13px 32px",color:(running||!target.trim())?"var(--dim)":"#fff",fontSize:15,fontWeight:700,cursor:(running||!target.trim())?"not-allowed":"pointer"}}>
+            {running?"Running...":"\u25b6 Start Recon"}
+          </button>
+          {running && (
+            <button onClick={stop} disabled={stopped}
+              style={{background:"#dc2626",border:"none",borderRadius:8,padding:"13px 24px",color:"#fff",fontSize:14,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
+              ■ Stop
+            </button>
+          )}
+        </div>
+
+        <button onClick={()=>setRShowAdvanced(o=>!o)}
+          style={{marginTop:16,background:"transparent",border:"none",color:"var(--muted)",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"6px 0"}}>
+          <span>{rShowAdvanced?"\u25be":"\u25b8"}</span> Advanced options (optional) — log in first, engagement profile
+        </button>
+        {rShowAdvanced && (
+          <div style={{marginTop:4}}>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
         <div style={{marginBottom:10,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6}}>
           <div onClick={()=>setAuthOpen(o=>!o)}
@@ -13641,23 +13708,9 @@ function ReconModule({token, onRunningChange, activeSections}) {
             </div>
           )}
         </div>
-        <ScanAuthConsent />
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          <input value={target} onChange={e=>setTarget(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&!running&&run()}
-            placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
-            style={{flex:3,minWidth:240,background:"var(--bg)",border:"1px solid var(--nav-active)",borderRadius:6,padding:"10px 14px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:13,outline:"none"}}/>
-          <button onClick={run} disabled={running||!target.trim()}
-            style={{background:running?"var(--border)":"var(--accent)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"var(--dim)":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
-            {running?"Running...":"Start Recon"}
-          </button>
-          {running && (
-            <button onClick={stop} disabled={stopped}
-              style={{background:"#dc2626",border:"none",borderRadius:6,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
-              ■ Stop
-            </button>
-          )}
-        </div>
+            <ScanAuthConsent variant="profile" />
+          </div>
+        )}
       </div>
 
       {/* ENTERPRISE-GRAPHICS-V1 module overview */}
@@ -22078,34 +22131,24 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           confused (mixing DVWA image_ref with prod hostname Target).
           For Container, the Run button alone sits next to a banner
           pointing at the Advanced Inputs panel below. */}
+      {/* SETUP-STEPS-V1 — step-by-step module setup */}
+      <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0 6px"}}>
+        <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
+        <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>{_containerMode ? "Provide your image / config" : "Enter your target"}</span>
+      </div>
       {!_containerMode && (
         <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
           onSelect={(v) => setTarget(v)}/>
       )}
-        <ScanAuthConsent />
-        {profileRun && (
-          <div style={{margin:"0 0 10px",padding:"8px 11px",background:profileRun.error?"var(--surface2)":"var(--surface2)",border:"1px solid "+(profileRun.error?"var(--bd-red)":"var(--nav-active)"),borderRadius:6,fontSize:11,lineHeight:1.5,color:"var(--text)"}}>
-            <div><b style={{color:"var(--t-93c5fd, #93c5fd)"}}>Engagement:</b> {(profileRun.profile||{}).profile_name || (profileRun.profile||{}).profile_id}
-              {profileRun.profile && profileRun.profile.max_rps ? ` — max ${profileRun.profile.max_rps} req/s, concurrency ${profileRun.profile.max_concurrency}${profileRun.profile.destructive_allowed ? "" : ", destructive tests OFF"}` : ""}
-              {profileRun.profile && profileRun.profile.auth ? (profileRun.profile.auth.authenticated ? `, logged in as role ${profileRun.profile.auth.role || "default"}` : ", unauthenticated") : ""}</div>
-            {profileRun.error && <div style={{color:"var(--t-fca5a5, #fca5a5)",fontWeight:600}}>{/^Target .*out of scope/i.test(profileRun.error) ? "OUT OF SCOPE" : "AUTH_FAILED / REFUSED"}: {profileRun.error} — nothing was scanned; results are marked not-run, never clean.</div>}
-            {(profileRun.notes||[]).length > 0 && (
-              <details style={{marginTop:4}}>
-                <summary style={{cursor:"pointer",color:"var(--t-fbbf24, #fbbf24)"}}>{profileRun.notes.length} scanner(s) affected by scope/safety enforcement (partial coverage)</summary>
-                {profileRun.notes.map((n,i) => <div key={i} style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--muted)"}}>{n.tool}: {n.note}</div>)}
-              </details>
-            )}
-          </div>
-        )}
-      <div style={{display:"flex", gap:8, marginBottom:6}}>
+      <div style={{marginBottom:8}}>
         {!_containerMode && (
           <input
             type="text" placeholder={schema.ph} value={target}
             onChange={e => setTarget(e.target.value)}
             disabled={running}
-            style={{flex:1, minWidth:0, background:"var(--surface)", border:"1px solid var(--border2)",
-                    borderRadius:8, padding:"9px 12px", color:"var(--heading)",
-                    fontSize:13, outline:"none", fontFamily:"var(--font-mono)"}}/>
+            style={{width:"100%", boxSizing:"border-box", background:"var(--surface)", border:"1px solid var(--border2)",
+                    borderRadius:8, padding:"13px 16px", color:"var(--heading)",
+                    fontSize:15, outline:"none", fontFamily:"var(--font-mono)"}}/>
         )}
         {_containerMode && (
           <div style={{flex:1, background:"var(--surface2)", border:"1px dashed var(--nav-active)",
@@ -22116,19 +22159,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             <span>Provide an <b style={{color:"var(--text)"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
           </div>
         )}
-        <button
-          onClick={runAll} disabled={!canRun}
-          title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
-          style={{background: running ? "var(--dim)" : "var(--accent)", opacity: !canRun && !running ? 0.55 : 1,
-                  border:"none", borderRadius:8, padding:"0 18px", whiteSpace:"nowrap",
-                  color:"#fff", fontWeight:600, fontSize:13,
-                  cursor: !canRun ? "not-allowed" : "pointer"}}>
-          {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
-        </button>
       </div>
-
-      {/* Example targets — clickable chips. Lets the customer try the module
-          on a safe public test target without having to scan their own infra. */}
       {!_containerMode && (MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap"}}>
           <span style={{fontSize:10, color:"var(--dim)", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
@@ -22146,6 +22177,44 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           ))}
         </div>
       )}
+
+      <div style={{display:"flex",alignItems:"center",gap:8,margin:"10px 0 6px"}}>
+        <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>2</span>
+        <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Confirm you're authorized</span>
+      </div>
+              <ScanAuthConsent variant="ack" />
+        {profileRun && (
+          <div style={{margin:"0 0 10px",padding:"8px 11px",background:profileRun.error?"var(--surface2)":"var(--surface2)",border:"1px solid "+(profileRun.error?"var(--bd-red)":"var(--nav-active)"),borderRadius:6,fontSize:11,lineHeight:1.5,color:"var(--text)"}}>
+            <div><b style={{color:"var(--t-93c5fd, #93c5fd)"}}>Engagement:</b> {(profileRun.profile||{}).profile_name || (profileRun.profile||{}).profile_id}
+              {profileRun.profile && profileRun.profile.max_rps ? ` — max ${profileRun.profile.max_rps} req/s, concurrency ${profileRun.profile.max_concurrency}${profileRun.profile.destructive_allowed ? "" : ", destructive tests OFF"}` : ""}
+              {profileRun.profile && profileRun.profile.auth ? (profileRun.profile.auth.authenticated ? `, logged in as role ${profileRun.profile.auth.role || "default"}` : ", unauthenticated") : ""}</div>
+            {profileRun.error && <div style={{color:"var(--t-fca5a5, #fca5a5)",fontWeight:600}}>{/^Target .*out of scope/i.test(profileRun.error) ? "OUT OF SCOPE" : "AUTH_FAILED / REFUSED"}: {profileRun.error} — nothing was scanned; results are marked not-run, never clean.</div>}
+            {(profileRun.notes||[]).length > 0 && (
+              <details style={{marginTop:4}}>
+                <summary style={{cursor:"pointer",color:"var(--t-fbbf24, #fbbf24)"}}>{profileRun.notes.length} scanner(s) affected by scope/safety enforcement (partial coverage)</summary>
+                {profileRun.notes.map((n,i) => <div key={i} style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--muted)"}}>{n.tool}: {n.note}</div>)}
+              </details>
+            )}
+          </div>
+        )}
+
+      <div style={{display:"flex",alignItems:"center",gap:8,margin:"12px 0 6px"}}>
+        <span style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
+        <span style={{fontSize:14,fontWeight:600,color:"var(--heading)"}}>Start the scan</span>
+      </div>
+      <div style={{display:"flex", gap:8, marginBottom:6}}>
+        <button
+          onClick={runAll} disabled={!canRun}
+          title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
+          style={{background: running ? "var(--dim)" : "var(--accent)", opacity: !canRun && !running ? 0.55 : 1,
+                  border:"none", borderRadius:8, padding:"0 18px", whiteSpace:"nowrap",
+                  color:"#fff", fontWeight:600, fontSize:13,
+                  cursor: !canRun ? "not-allowed" : "pointer"}}>
+          {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
+        </button>
+      </div>
+      <ScanAuthConsent variant="profile" />
+
 
       {/* Per-module hint + optional auth toggle */}
       <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:14,
@@ -23222,7 +23291,7 @@ function AdminPanel({ token }) {
     if (u.status === "suspended") return "SUSPENDED";
     if (u.expiry_status === "expired") return "EXPIRED";
     if (u.expiry_status === "expiring_soon") return `EXPIRING IN ${u.days_left}d`;
-    if (u.days_left !== null) return `${u.days_left}d LEFT`;
+    if (u.days_left != null) return `${u.days_left}d LEFT`;
     return "ACTIVE";
   };
 
