@@ -4943,7 +4943,8 @@ function WebAppModule(props) {
             setLoginUrl(creds.url);
             setLoginUser(creds.user);
             setLoginPass(creds.pass);
-            setShowAuthPanel(true);
+            // SETUP-TIDY-V1: keep the advanced auth panel collapsed; the captured
+            // cookie shows a "credentials ready" badge, so the default view stays clean.
           }
           if (lab) {
             try {
@@ -4957,20 +4958,6 @@ function WebAppModule(props) {
 
         {/* Target input row */}
         <div style={{marginTop:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-            <label style={{fontSize:11,color:"var(--dim)",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
-            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:4,padding:"2px 8px",color:"var(--t-60a5fa, #60a5fa)",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
-          </div>
-          {showHistory && targetHistory.length>0 && !running && (
-            <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
-              {targetHistory.map((t,i)=>(
-                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--t-93c5fd, #93c5fd)",fontFamily:"var(--font-mono)"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <span style={{color:"var(--border2)",fontSize:10}}>{i+1}</span>{t}
-                </div>
-              ))}
-            </div>
-          )}
 
           {/* WAP-AUTH-PANEL-V5 — compact Recon-style */}
           <div style={{marginBottom:10,background:"var(--bg)",border:"1px solid var(--border)",borderRadius:6}}>
@@ -5036,6 +5023,21 @@ function WebAppModule(props) {
             )}
           </div>
           <ScanAuthConsent />
+          {/* SETUP-TIDY-V1: the target label + history now sit directly above the input */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+            <label style={{fontSize:11,color:"var(--dim)",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
+            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"var(--border)",border:"1px solid var(--border2)",borderRadius:4,padding:"2px 8px",color:"var(--t-60a5fa, #60a5fa)",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
+          </div>
+          {showHistory && targetHistory.length>0 && !running && (
+            <div style={{background:"var(--surface)",border:"1px solid var(--nav-active)",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
+              {targetHistory.map((t,i)=>(
+                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--t-93c5fd, #93c5fd)",fontFamily:"var(--font-mono)"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--border)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <span style={{color:"var(--border2)",fontSize:10}}>{i+1}</span>{t}
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
                 real target field alone. Combined with autoComplete="off" +
@@ -13504,7 +13506,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             setLoginUrl(creds.url);
             setLoginUser(creds.user);
             setLoginPass(creds.pass);
-            setAuthOpen(true);
+            // SETUP-TIDY-V1: keep the advanced auth panel collapsed by default.
           }
         }} targets={[
           // Pruned to verified-working targets only. DVWA/WebGoat/Mutillidae/bWAPP
