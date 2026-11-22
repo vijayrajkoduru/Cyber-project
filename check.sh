@@ -36,7 +36,7 @@ login_check() {
     SKIP=$((SKIP+1)); return
   fi
   local code
-  code=$(VL_PW="$pw" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({"username":"ADMIN","password":os.environ["VL_PW"]}))' \
+  code=$(VL_USER="${VL_ADMIN_USER:-koduru}" VL_PW="$pw" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({"username":os.environ["VL_USER"],"password":os.environ["VL_PW"]}))' \
          | curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST http://localhost/api/auth/login \
                 -H 'Content-Type: application/json' --data-binary @-)
   if [ "$code" = "200" ]; then echo "  /api/auth/login"; PASS=$((PASS+1))

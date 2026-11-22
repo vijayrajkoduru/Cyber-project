@@ -23286,14 +23286,14 @@ function AdminPanel({ token }) {
       {loading ? <div style={{textAlign:"center",padding:40,color:"var(--dim)"}}>Loading users...</div> : (
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {filtered.map(u=>(
-            <div key={u.id} style={{background:"var(--surface)",border:`1px solid ${u.username==="ADMIN"?"#7c3aed30":"var(--border)"}`,borderLeft:`4px solid ${statusColor(u)}`,borderRadius:10,padding:"16px 20px"}}>
+            <div key={u.id} style={{background:"var(--surface)",border:`1px solid ${u.role==="superadmin"?"#7c3aed30":"var(--border)"}`,borderLeft:`4px solid ${statusColor(u)}`,borderRadius:10,padding:"16px 20px"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
 
                 {/* User info */}
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                     <span style={{fontSize:15,fontWeight:700,color:"var(--heading)"}}>{u.username}</span>
-                    {u.username==="ADMIN" && <span style={{fontSize:10,color:"var(--t-a78bfa, #a78bfa)",fontWeight:700,background:"var(--tint-purple)",padding:"2px 8px",borderRadius:4}}>SUPERADMIN</span>}
+                    {u.role==="superadmin" && <span style={{fontSize:10,color:"var(--t-a78bfa, #a78bfa)",fontWeight:700,background:"var(--tint-purple)",padding:"2px 8px",borderRadius:4}}>SUPERADMIN</span>}
                     <span style={{fontSize:10,color:"var(--dim)",background:"var(--border)",padding:"2px 8px",borderRadius:4,fontWeight:600}}>{u.plan?.toUpperCase()}</span>
                     <span style={{fontSize:10,color:statusColor(u),fontWeight:700,background:statusColor(u)+"15",padding:"2px 8px",borderRadius:4}}>{statusLabel(u)}</span>
                   </div>
@@ -23305,7 +23305,7 @@ function AdminPanel({ token }) {
                 </div>
 
                 {/* Actions */}
-                {u.username !== "ADMIN" && (
+                {u.role !== "superadmin" && (
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                     {/* Extend */}
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>

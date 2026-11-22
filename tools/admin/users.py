@@ -9,6 +9,11 @@ from tools.auth._db import get_db
 router = APIRouter()
 
 
+def _is_superadmin(con, username: str) -> bool:
+    row = con.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
+    return bool(row) and row["role"] == "superadmin"
+
+
 def verify_admin_or_super(payload=Depends(verify_token)):
     if not payload.get("_role_verified"):
         raise HTTPException(403, "Account state could not be verified; admin access denied")
@@ -43,9 +48,9 @@ async def list_users(_=Depends(verify_admin_or_super)):
 
 @router.post("/api/admin/users/{username}/suspend")
 async def suspend_user(username: str, _=Depends(verify_admin_or_super)):
-    if username.upper() == "ADMIN":
-        raise HTTPException(403, "Cannot suspend the ADMIN account")
     with get_db() as con:
+        if _is_superadmin(con, username):
+            raise HTTPException(403, "Cannot suspend a superadmin account")
         result = con.execute("UPDATE users SET status='suspended' WHERE username=?", (username,))
         if result.rowcount == 0:
             raise HTTPException(404, f"User '{username}' not found")
@@ -100,9 +105,9 @@ async def extend_plan(username: str, req: ExtendRequest, _=Depends(verify_admin_
 
 @router.delete("/api/admin/users/{username}")
 async def delete_user(username: str, _=Depends(verify_admin_or_super)):
-    if username.upper() == "ADMIN":
-        raise HTTPException(403, "Cannot delete the ADMIN account")
     with get_db() as con:
+        if _is_superadmin(con, username):
+            raise HTTPException(403, "Cannot delete a superadmin account")
         row = con.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
         if not row:
             raise HTTPException(404, f"User '{username}' not found")

@@ -215,7 +215,10 @@ def _seed_admin():
         return
     with _engine.begin() as conn:
         c = _Conn(conn)
-        if c.execute("SELECT 1 FROM users WHERE username=?", ("ADMIN",)).fetchone():
+        # Bootstrap only: once ANY superadmin exists (e.g. the ADMIN seed was
+        # retired in favour of a named superadmin), never re-create ADMIN.
+        if c.execute("SELECT 1 FROM users WHERE username=? OR role='superadmin'",
+                     ("ADMIN",)).fetchone():
             return
         now = datetime.datetime.utcnow().isoformat() + "Z"
         c.execute(
