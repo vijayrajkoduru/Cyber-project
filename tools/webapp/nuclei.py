@@ -41,7 +41,7 @@ _CVSS_DEFAULT = {"CRITICAL": "9.5", "HIGH": "7.5", "MEDIUM": "5.5", "LOW": "3.0"
 
 
 @router.post("/api/webapp/scan/nuclei")
-@vl_turbo()
+@vl_turbo(timeout_s=150)  # NUCLEI-CAP-V1: must outlast the nuclei subprocess timeout
 @vl_verify()
 def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
     if not os.path.isfile(_which()):

@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.post("/api/webapp/scan/nuclei_default_creds")
-@vl_turbo()
+@vl_turbo(timeout_s=120)  # NUCLEI-CAP-V1: must outlast the nuclei subprocess timeout
 @vl_verify()
 def scan(req: ScanRequest, _=Depends(verify_scan_quota)):
     res = run_nuclei(req, tags=["default-login", "default-page", "weak-credentials"],

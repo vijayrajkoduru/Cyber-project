@@ -63,8 +63,39 @@ def _time_post(url, data, req, timeout):
     return r, time.time() - t0
 
 
+# OUTPUT-ECHO-V1 — output-based confirmation that does not depend on timing.
+# Timing is unreliable on PHP targets during a parallel scan: PHP serialises
+# requests that share a session (session file lock), so with ~8 scanners on
+# one PHPSESSID every probe queues and the "added 4-9s" window is missed
+# (DVWA /vulnerabilities/exec/ was never confirmed). Here the shell must
+# COMPUTE an arithmetic product: the payload carries "$((a*b))" and only the
+# product "vl<a*b>x" counts, so a page that merely reflects input can never
+# match (zero-FP). POSIX sh only; Windows targets still use the timing path.
+_ECHO_SEPARATORS = (";", "|", "&&", "||", "\n", "$(", "`")
+
+
+def _echo_probe(sep: str):
+    import random
+    a, b = random.randint(1000, 9999), random.randint(1000, 9999)
+    expr = f"echo vl$(({a}*{b}))x"
+    if sep == "$(":
+        payload = f"$({expr})"
+    elif sep == "`":
+        payload = f"`{expr}`"
+    else:                      # ; | && || and a literal newline
+        payload = f"{sep}{expr}"
+    return payload, f"vl{a * b}x"
+
+
+def _echo_hit(resp, expected: str) -> bool:
+    try:
+        return resp is not None and expected in (resp.text or "")[:200000]
+    except Exception:
+        return False
+
+
 @router.post("/api/webapp/scan/cmd_injection")
-@vl_turbo(timeout_s=120)   # 60s GET phase + 40s POST-form phase + in-flight probe
+@vl_turbo(timeout_s=180)   # 2x20s echo + 60s GET timing + 40s POST timing + in-flight probe
 @vl_verify()
 def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
@@ -97,6 +128,58 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     # Per-param cap: 32 covers every interesting variant family while keeping
     # latency bounded (each tested payload may cost up to 5s of sleep delay).
     payload_set = _PAYLOAD_SET[:32]
+
+    # OUTPUT-ECHO-V1 phase (fast, no sleeps): POST forms, then GET params.
+    _echo_hits = set()          # (path, field) confirmed here -> skip timing
+    # POST forms first (DVWA exec etc. are only reachable that way), each
+    # phase with its own small budget so neither can starve the other.
+    _ECHO_BUDGET = 20.0
+    _echo_start = time.time()
+    for form in post_forms:
+        for key in form["injectable"][:3]:
+            if time.time() - _echo_start > _ECHO_BUDGET: break
+            path = urlparse(form["action"]).path.rstrip("/")
+            if (path, key) in _echo_hits: continue
+            for sep in _ECHO_SEPARATORS:
+                tests += 1
+                inj, expected = _echo_probe(sep)
+                r = pf.post_data(form, pf.build_data(form, req, key, "127.0.0.1" + inj), req, timeout=15)
+                if _echo_hit(r, expected):
+                    findings.append(wrap_finding(
+                        f"OS command injection in POST field {key!r} (shell output confirmed)",
+                        "CRITICAL", cvss="9.8", cwe="CWE-78", owasp="A03:2021",
+                        remediation="Never pass user input to a shell. Use argv-style exec (shell=False).",
+                        evidence_marker=(f"POST {form['action']} field={key} payload={'127.0.0.1' + inj!r} "
+                                         f"-> response contains {expected!r} (shell-computed product)"
+                                         + (" (fresh CSRF token per request)" if form["csrf_fields"] else ""))))
+                    confirmed.append({"param": key, "payload": inj, "url": form["action"],
+                                      "category": "linux-shell", "name": "output-echo", "method": "POST"})
+                    _echo_hits.add((path, key))
+                    break
+    _echo_start = time.time()
+    for tu_url, tu_parsed, params in test_urls[:8]:
+        for key in list(params.keys())[:3]:
+            if time.time() - _echo_start > _ECHO_BUDGET: break
+            original = params[key][0]
+            for sep in _ECHO_SEPARATORS:
+                tests += 1
+                inj, expected = _echo_probe(sep)
+                new_params = {k: v[0] for k, v in params.items()}
+                new_params[key] = original + inj
+                u = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
+                r = safe_get(u, req=req, allow_redirects=True, timeout=12)
+                if _echo_hit(r, expected):
+                    findings.append(wrap_finding(
+                        f"OS command injection in {key!r} (shell output confirmed)",
+                        "CRITICAL", cvss="9.8", cwe="CWE-78", owasp="A03:2021",
+                        remediation="Never pass user input to a shell. Use argv-style exec (shell=False).",
+                        evidence_marker=(f"param={key} payload={inj!r} -> response contains "
+                                         f"{expected!r} (shell-computed product; not a reflection)")))
+                    confirmed.append({"param": key, "payload": inj, "category": "linux-shell",
+                                      "name": "output-echo", "url": tu_url})
+                    _echo_hits.add((tu_parsed.path.rstrip("/"), key))
+                    break
+
     # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
     _wallclock_start = time.time()
     _WALLCLOCK_BUDGET = 60.0
@@ -106,6 +189,7 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
         if _bailed: break
         for key in list(params.keys())[:3]:
             if _bailed: break
+            if (tu_parsed.path.rstrip("/"), key) in _echo_hits: continue
             original = params[key][0]
             for entry in payload_set:
                 if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
@@ -172,6 +256,7 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
         post_forms_tested.append(action)
         for key in form["injectable"][:3]:
             if _post_bailed: break
+            if (urlparse(action).path.rstrip("/"), key) in _echo_hits: continue
             # Per-form benign baseline: the form's own command (e.g. DVWA's
             # ping 127.0.0.1) takes time on its own, so measure it and compare
             # ADDED delay, isolating the injected sleep.
@@ -210,7 +295,7 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
 
     summary = (f"Cmd injection: {tests} variants from {len(payload_set)}-entry payload set "
                f"(merged: {len(CMD_PAYLOADS)} baked-in + {len(_AI_EXTRA_CMD)} AI-curated, 8 categories) "
-               f"with double-sleep timing confirmation in {time.time() - _wallclock_start:.1f}s")
+               f"with output-echo + double-sleep timing confirmation in {time.time() - _wallclock_start:.1f}s")
     summary += f"; {len(post_forms_tested)} POST form(s) tested"
     if _bailed:
         summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s"
@@ -218,7 +303,7 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
         summary += f" — POST-form phase bailed at {_POST_BUDGET}s"
     return vuln_response(tool="cmd_injection", target=req.target, findings=findings,
         tested=max(tests, 1),
-        what_checked=f"URL parameters and POST form fields for OS command injection (timing-based, 8-category merged library: {len(CMD_PAYLOADS)} baked-in + {len(_AI_EXTRA_CMD)} AI-curated)",
+        what_checked=f"URL parameters and POST form fields for OS command injection (output-echo + timing-based, 8-category merged library: {len(CMD_PAYLOADS)} baked-in + {len(_AI_EXTRA_CMD)} AI-curated)",
         tests_summary=summary,
         raw_data={"cmd_injection": {"baseline_seconds": t0,
                                      "confirmed": confirmed,
