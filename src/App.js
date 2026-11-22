@@ -23291,7 +23291,7 @@ function AdminPanel({ token }) {
     if (u.status === "suspended") return "SUSPENDED";
     if (u.expiry_status === "expired") return "EXPIRED";
     if (u.expiry_status === "expiring_soon") return `EXPIRING IN ${u.days_left}d`;
-    if (u.days_left !== null) return `${u.days_left}d LEFT`;
+    if (u.days_left != null) return `${u.days_left}d LEFT`;
     return "ACTIVE";
   };
 
