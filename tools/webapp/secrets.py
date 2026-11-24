@@ -10,7 +10,10 @@ Workflow:
   2. Run every AI pattern against each response body
   3. Emit a finding per (file, pattern) hit — capped at 30 to avoid spam
 """
+import base64
+import json
 import re
+import string
 
 import httpx
 
@@ -138,6 +141,92 @@ def _looks_random(tok: str) -> bool:
     return ent >= 3.5
 
 
+# ── SECRETS-FP-V2 — minified-bundle hardening ────────────────────────
+# Re-measured against Juice Shop's Angular bundle plus a corpus of common
+# vendor-library constructs (node-forge / jsencrypt PEM builders, DB-URI
+# string concatenation, i18n keys, jwt.io sample tokens, ...).
+#
+# PEM: a header alone is a library constant (forge/jsencrypt/asn1 parsers
+# all ship the bare "BEGIN RSA PRIVATE KEY" PEM header to BUILD or PARSE keys). Only
+# report when base64 key material actually follows the header.
+_PEM_BODY_RE = re.compile(
+    r"(?:\s|\\[rn])*"
+    r"(?:(?:Proc-Type|DEK-Info|Comment|Version|Hash)\s*:[^\n\\]*(?:\s|\\[rn])+)*"
+    r"[A-Za-z0-9+/=]{40,}")
+# DB connection URIs: credentials must be a literal, not code / template.
+_URI_SERVICES = {"mongodb", "postgres", "mysql", "redis", "rabbitmq"}
+_URI_CODE_CHARS = re.compile(r"[\"'`(){}\[\]<>,;|\\]|\$\{")
+_PLACEHOLDER_PASSWORDS = {
+    "password", "pass", "passwd", "pwd", "pw", "secret", "changeme",
+    "mypassword", "yourpassword", "user", "username", "test",
+    "xxx", "xxxx", "foo", "bar", "example",
+}
+# jwt.io's canonical sample token ships inside many docs/libraries.
+_SAMPLE_JWT_CLAIMS = ({"sub": "1234567890", "name": "John Doe"},)
+_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*")
+_TOKEN_CHARS = set(string.ascii_letters + string.digits + "+/_-")
+_SEQ_RUNS = ("abcdefgh", "bcdefghi", "ABCDEFGH", "BCDEFGHI", "01234567",
+             "12345678", "qwertyui", "QWERTYUI")
+
+
+def _b64url_json(seg: str):
+    try:
+        raw = base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+        val = json.loads(raw.decode("utf-8"))
+        return val if isinstance(val, dict) else None
+    except Exception:
+        return None
+
+
+def _jwt_is_real(matched: str) -> bool:
+    """Header and payload must base64url-decode to JSON objects, the header
+    must name an ``alg``, and it must not be a well-known sample token."""
+    jm = _JWT_RE.search(matched)
+    if not jm:
+        return False
+    parts = jm.group(0).split(".")
+    hdr, pay = _b64url_json(parts[0]), _b64url_json(parts[1])
+    if hdr is None or pay is None or "alg" not in hdr:
+        return False
+    for sample in _SAMPLE_JWT_CLAIMS:
+        if all(pay.get(k) == v for k, v in sample.items()):
+            return False
+    return True
+
+
+def _looks_like_identifier(tok: str) -> bool:
+    """i18n keys (LABEL_API_KEY_2FA), camelCase / snake_case identifiers and
+    alphabet tables — high entropy by Shannon, but not secrets."""
+    core = tok.strip("=\"'")
+    if re.fullmatch(r"[A-Z0-9]+(?:_[A-Z0-9]+){2,}", core):
+        return True
+    if any(r in core for r in _SEQ_RUNS):
+        return True
+    words = re.findall(r"[A-Z]?[a-z]{3,}|[A-Z]{3,}(?![a-z])", core)
+    covered = sum(len(w) for w in words)
+    return len(words) >= 2 and covered >= 0.75 * len(core)
+
+
+def _uri_is_fp(matched: str) -> bool:
+    try:
+        rest = matched.split("://", 1)[1]
+        creds, host = rest.split("@", 1)
+    except (IndexError, ValueError):
+        return True
+    if _URI_CODE_CHARS.search(creds) or not host or host[0] in "\"'`$+(":
+        return True   # string concatenation / template literal, not a literal URI
+    pwd = creds.split(":", 1)[1] if ":" in creds else creds
+    return (not pwd or set(pwd) <= {"*", "x", "X"}
+            or pwd.lower() in _PLACEHOLDER_PASSWORDS)
+
+
+def _is_fragment(body: str, m) -> bool:
+    """Shape-only match carved out of a longer token (JWT, URL, base64 run)."""
+    a = body[m.start() - 1] if m.start() > 0 else ""
+    b = body[m.end()] if m.end() < len(body) else ""
+    return (a in _TOKEN_CHARS) or (b in _TOKEN_CHARS) or a == "." or b == "."
+
+
 def _is_false_positive(entry: dict, body: str, m) -> bool:
     name = entry.get("name", "")
     service = entry.get("service", "")
@@ -149,7 +238,13 @@ def _is_false_positive(entry: dict, body: str, m) -> bool:
         return True
     before = body[max(0, m.start() - 60):m.start()]
     if service == "private_key":
-        return False  # PEM headers are unambiguous
+        # header must be followed by actual base64 key material
+        return not _PEM_BODY_RE.match(body, m.end(), m.end() + 600)
+    if service in _URI_SERVICES:
+        return _uri_is_fp(matched)
+    if service == "jwt" or name == "Zoom API Token":
+        if not _jwt_is_real(matched):
+            return True
     weak = service in _WEAK_SERVICES or name in _NEEDS_CONTEXT
     if not weak:
         return False  # distinctive vendor prefix: AKIA / ghp_ / sk_live_ ...
@@ -158,15 +253,26 @@ def _is_false_positive(entry: dict, body: str, m) -> bool:
     if name == "BIP39 Mnemonic (12-24 words)":
         ctx_re = _PER_PATTERN_CONTEXT[name]
         return not ctx_re.search(before)
-    if service != "jwt" and not _looks_random(tok):
-        return True
+    if service != "jwt":
+        if not _looks_random(tok):
+            return True
+        # identifiers / i18n keys — unless the key name says "password"
+        if not re.search(r"(?i)pass|pwd", matched) and _looks_like_identifier(tok):
+            return True
     if name in _NEEDS_CONTEXT:
+        if _is_fragment(body, m):
+            return True
         ctx_re = _PER_PATTERN_CONTEXT.get(name, _KEY_CONTEXT_RE)
         # key name must precede the value (inside the match or just before)
         prefix = before + matched[: max(0, matched.find(tok))]
         if not ctx_re.search(prefix[-60:]):
             return True
     return False
+
+
+def _is_generic(entry: dict) -> bool:
+    return entry.get("service") == "generic" or entry.get("name") in _NEEDS_CONTEXT
+
 
 _TIMEOUT = httpx.Timeout(connect=4.0, read=6.0, write=3.0, pool=8.0)
 _MAX_JS_FILES = 10
@@ -231,14 +337,26 @@ async def webapp_secrets(req: ScanRequest, payload=Depends(verify_scan_quota)):
     ) as client:
         bodies = await _fetch_with_extracted_js(client, base)
 
-    # Scan each body against every compiled pattern
+    # Scan each body against every compiled pattern. Vendor-specific
+    # patterns run first; a generic / shape-only hit that overlaps a span
+    # already claimed by a specific pattern is the same secret reported
+    # twice (e.g. an AIza key also matching "Generic API key param") — skip it.
+    # Priority: vendor-specific > generic keyword > shape-only.
+    ordered = sorted(_COMPILED, key=lambda c: (_is_generic(c[0]),
+                                               c[0].get("name") in _NEEDS_CONTEXT))
     for label, body in bodies:
         if not body: continue
-        for entry, compiled in _COMPILED:
+        claimed = []
+        for entry, compiled in ordered:
+            generic = _is_generic(entry)
             for m in compiled.finditer(body):
                 if _is_false_positive(entry, body, m):
                     suppressed += 1
                     continue
+                if generic and any(m.start() < e and s0 < m.end() for s0, e in claimed):
+                    suppressed += 1
+                    continue
+                claimed.append((m.start(), m.end()))
                 snippet = m.group(0)[:80]
                 hits.append({
                     "name": entry["name"], "service": entry["service"],

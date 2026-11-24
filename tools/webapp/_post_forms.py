@@ -240,9 +240,18 @@ def default_data(form: dict) -> dict:
 
 def refresh_hidden(form: dict, req, data: dict) -> dict:
     """If the form has CSRF tokens, re-fetch its page and overwrite the
-    hidden values with fresh ones. Returns the (possibly updated) data."""
+    hidden values with fresh ones. Returns the (possibly updated) data.
+
+    CSRF-PROBE-V1: legacy lab seeds (text_fields/extra) carry no hidden
+    fields, so at DVWA high/impossible their per-request ``user_token`` was
+    never sent → every submit rejected → false negative. A form without
+    known tokens is probed ONCE; tokens found on the live page are adopted
+    into ``csrf_fields`` (refreshed on every later submit), otherwise the
+    probe is not repeated."""
     if not form.get("csrf_fields"):
-        return data
+        if form.get("_csrf_probed"):
+            return data
+        form["_csrf_probed"] = True
     r = safe_get(form["page"], req=req, allow_redirects=True, timeout=10, retries=0)
     if r is None or not r.text:
         return data
@@ -258,6 +267,17 @@ def refresh_hidden(form: dict, req, data: dict) -> dict:
             best = (score, pf)
     if best is None or best[0] == 0:
         return data
+    if not form.get("csrf_fields"):
+        live = [f["name"] for f in best[1]["fields"]
+                if is_csrf_field(f["name"], f.get("type", ""))]
+        if not live:
+            return data
+        form["csrf_fields"] = live
+        known = {f["name"] for f in form["fields"]}
+        form["fields"].extend({"name": n, "type": "hidden", "value": ""}
+                              for n in live if n not in known)
+        if form.get("injectable"):
+            form["injectable"] = [n for n in form["injectable"] if n not in live]
     out = dict(data)
     for f in best[1]["fields"]:
         if f["type"] == "hidden" and f["name"] in form["csrf_fields"]:

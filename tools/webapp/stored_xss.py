@@ -1,11 +1,11 @@
 """Stored XSS — post a unique payload, GET listing endpoints, look for echoed-unescaped match."""
 import secrets
-from urllib.parse import urlencode
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, safe_post, wrap_finding, standard_response)
 from tools._shared import destructive_skip
 from tools._spa_state import load_spa_state
+from tools.webapp import _post_forms as pf
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 
@@ -19,6 +19,20 @@ _TARGETS = [
     ("/api/Reviews",   {"review": "__PAYLOAD__", "rating": 3}, "/api/Reviews"),
     ("/api/posts",     {"title": "Test", "content": "__PAYLOAD__"}, "/api/posts"),
 ]
+
+
+def _juice_captcha(base, req):
+    """Juice Shop issues a fresh captcha per feedback POST (a per-request
+    token in all but name); the hard-coded captchaId/captcha pair was always
+    rejected. Fetch a fresh one right before each submit."""
+    r = safe_get(base + "/rest/captcha/", req=req, allow_redirects=False, timeout=8, retries=0)
+    try:
+        j = r.json() if r is not None and r.status_code == 200 else None
+        if isinstance(j, dict) and "captchaId" in j and "answer" in j:
+            return {"captchaId": j["captchaId"], "captcha": str(j["answer"])}
+    except Exception:
+        pass
+    return {}
 
 
 @router.post("/api/webapp/scan/stored_xss")
@@ -38,6 +52,8 @@ def scan_stored_xss(req: ScanRequest, _=Depends(verify_scan_quota)):
         payload = f'<svg/onload="{marker}=1">'
         body = {k: (v.replace("__PAYLOAD__", payload) if isinstance(v, str) else v)
                 for k, v in body_template.items()}
+        if "captchaId" in body:
+            body.update(_juice_captcha(base, req))
 
         tests += 1
         post_r = safe_post(base + post_path, json=body, req=req,
@@ -64,40 +80,50 @@ def scan_stored_xss(req: ScanRequest, _=Depends(verify_scan_quota)):
             break  # one is enough
 
     # POST-FORM-STORED-XSS-V1 — classic stored XSS lives behind HTML POST forms
-    # (e.g. DVWA guestbook /vulnerabilities/xss_s/), not just JSON APIs. For each
-    # discovered/seeded form, submit a unique <script> marker into its text
-    # fields, then re-fetch the form page; if the marker comes back UNESCAPED,
-    # it is stored XSS.
+    # (e.g. DVWA guestbook /vulnerabilities/xss_s/), not just JSON APIs.
+    # STORED-XSS-CSRF-V1 — submissions go through the shared POST-form helper
+    # (tools.webapp._post_forms), which re-fetches the form page right before
+    # EVERY submit and re-scrapes the hidden anti-CSRF fields (DVWA user_token,
+    # Django csrfmiddlewaretoken, Rails authenticity_token, ...). The previous
+    # hand-rolled loop posted the crawl-time token (or none at all), so on
+    # per-request-token forms every payload was rejected -> false negative.
+    # One field is injected per submission (others keep benign defaults); a
+    # fresh, payload-free GET of the form page / action must return the unique
+    # marker verbatim for a finding (a reflection in the POST response itself
+    # does not count). Sensitive forms (login, password, reset/clear) are
+    # dropped by normalized_post_forms.
     spa = load_spa_state(req.target)
-    for form in [f for f in (spa.get("forms") or []) if f.get("text_fields")][:6]:
-        action = form.get("action")
-        tfields = [f for f in (form.get("text_fields") or []) if f]
-        if not action or not tfields:
-            continue
-        method = str(form.get("method", "post")).lower()
-        marker = "vlsx" + secrets.token_hex(5)
-        payload = f"<script>{marker}</script>"
-        data = {f: "vltest" for f in tfields}
-        data.update(dict(form.get("extra") or {}))
-        data[tfields[-1]] = payload   # payload into the message-like field
-        tests += 1
-        if method == "post":
-            safe_post(action, data=data, req=req, allow_redirects=True, timeout=10)
-        else:
-            sep = "&" if "?" in action else "?"
-            safe_get(action + sep + urlencode(data), req=req, allow_redirects=True, timeout=10)
-        tests += 1
-        g = safe_get(action, req=req, allow_redirects=True, timeout=10)
-        body = (g.text if g is not None else "") or ""
-        if payload in body:   # verbatim, unescaped
-            findings.append(wrap_finding(
-                f"Stored XSS — payload submitted to {action} echoed unescaped on reload",
-                "CRITICAL", cvss="9.6", cwe="CWE-79", owasp="A03:2021",
-                remediation=("HTML-escape user content on output. Sanitise stored content "
-                           "(DOMPurify/bleach). Add a strict Content-Security-Policy."),
-                evidence_marker=f"{method.upper()} {action} field={tfields[-1]!r} marker {marker} reflected verbatim on reload"))
-            confirmed.append({"action": action, "field": tfields[-1], "marker": marker})
+    form_hit = False
+    for form in pf.normalized_post_forms(spa, limit=6):
+        if form_hit:
             break
+        for field in list(form["injectable"])[:4]:
+            marker = "vlsx" + secrets.token_hex(5)
+            payload = f'<svg/onload="{marker}=1">'
+            tests += 1
+            resp = pf.submit(form, req, field, payload, timeout=10)
+            if resp is None or resp.status_code >= 400:
+                continue
+            hit_view = None
+            for view in dict.fromkeys([form["page"], form["action"]]):
+                tests += 1
+                g = safe_get(view, req=req, allow_redirects=True, timeout=10)
+                if g is not None and g.status_code == 200 and payload in (g.text or ""):
+                    hit_view = view
+                    break
+            if hit_view:
+                findings.append(wrap_finding(
+                    f"Stored XSS — field {field!r} submitted to {form['action']} rendered unescaped on reload",
+                    "CRITICAL", cvss="9.6", cwe="CWE-79", owasp="A03:2021",
+                    remediation=("HTML-escape user content on output. Sanitise stored content "
+                               "(DOMPurify/bleach). Add a strict Content-Security-Policy."),
+                    evidence_marker=(f"POST {form['action']} field={field!r} marker {marker} "
+                                     f"(CSRF fields refreshed: {form.get('csrf_fields') or 'none'}) "
+                                     f"-> fresh GET {hit_view} returned payload verbatim")))
+                confirmed.append({"action": form["action"], "field": field,
+                                  "get": hit_view, "marker": marker})
+                form_hit = True
+                break
 
     return standard_response(tool="stored_xss", target=req.target,
         findings=findings, tests_performed=tests,
