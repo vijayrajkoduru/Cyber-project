@@ -1107,11 +1107,6 @@ function LandingPage({onStart, onSignIn}) {
     {name:"Enterprise", blurb:"For security teams", price:"Custom", note:"billed annually", highlight:false, cta:"Contact Sales", onClick:()=>{window.location.href="mailto:support@vulnuslab.com?subject=VulnusLab%20Enterprise";},
      feats:["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Priority support","Admin panel access","SLA & invoicing"]},
   ];
-  const TESTI = [
-    {tag:"Pentester", quote:"This dashboard saves me 4-5 hours per engagement. I run the full scan, download the PDF, and send it straight to the client. The findings are accurate and professional.", who:"Rahul S.", role:"Senior Penetration Tester"},
-    {tag:"Student", quote:"Perfect for OSCP prep. Every tool you need is already there. I practiced on DVWA and WebGoat every day and passed my exam on the first attempt.", who:"Priya M.", role:"Security Student & OSCP Certified"},
-    {tag:"Enterprise", quote:"Our security team runs weekly scans on our infrastructure. The OWASP Top 10 coverage and automatic reports give management the confidence they need for compliance.", who:"Arjun K.", role:"IT Security Manager"},
-  ];
   const FAQ = [
     {q:"Is this legal to use?", a:"Yes — for authorized testing only. You must have written permission to scan any target. We include 5 built-in vulnerable labs (DVWA, WebGoat, etc.) for safe, legal practice. Never scan targets you do not own or have permission to test."},
     {q:"Do I need to install anything?", a:"No. Everything runs in your browser against our Kali Linux cloud. No VM, no downloads, no local setup."},
@@ -1306,23 +1301,6 @@ function LandingPage({onStart, onSignIn}) {
           ))}
         </div>
         <p style={{textAlign:"center", fontSize:12, color:"var(--vl-475569)", marginTop:18}}>Secure payment by Razorpay · No credit card for trial · Cancel anytime</p>
-      </div>
-
-      {/* Testimonials */}
-      <div style={{...container, padding:"54px 24px 20px"}}>
-        {sectionTitle("Testimonials", "Loved By Security Professionals")}
-        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16}}>
-          {TESTI.map((t,i)=>(
-            <div key={i} style={card}>
-              <div style={{fontSize:10, letterSpacing:1, textTransform:"uppercase", color:C.accent, fontWeight:800, marginBottom:10}}>{t.tag}</div>
-              <div style={{fontSize:13.5, lineHeight:1.65, color:"var(--vl-e2e8f0)", marginBottom:16}}>&ldquo;{t.quote}&rdquo;</div>
-              <div style={{display:"flex", alignItems:"center", gap:10}}>
-                <div style={{width:34, height:34, borderRadius:"50%", background:"linear-gradient(135deg,#1e40af,#3b82f6)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#fff"}}>{t.who[0]}</div>
-                <div><div style={{fontSize:13, fontWeight:700, color:"var(--vl-f1f5f9)"}}>{t.who}</div><div style={{fontSize:11, color:C.muted}}>{t.role}</div></div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* FAQ */}

@@ -110,7 +110,8 @@ def is_destructive_route(path: str) -> bool:
 # ── Scan context ───────────────────────────────────────────────────
 class ScanContext:
     __slots__ = ("rt", "user_id", "path", "passive", "lock", "stats", "samples",
-                 "auth_role", "auth_mode", "approved_hosts", "approved_nets", "_approved_ips")
+                 "auth_role", "auth_mode", "approved_hosts", "approved_nets", "_approved_ips",
+                 "_sock_ok")
 
     def __init__(self, rt, user_id: str, path: str = "", auth_role: Optional[str] = None,
                  auth_mode: Optional[str] = None):
@@ -124,13 +125,15 @@ class ScanContext:
         self.stats = {"in_scope": 0, "third_party_intel": 0, "auth_provider": 0,
                       "blocked_out_of_scope": 0, "blocked_outside_window": 0,
                       "blocked_rate_limit": 0, "rate_limit_wait_sec": 0.0,
-                      "subprocess_in_scope": 0, "subprocess_blocked": 0}
+                      "subprocess_in_scope": 0, "subprocess_blocked": 0,
+                      "socket_in_scope": 0, "socket_blocked": 0}
         self.samples: list = []
         # Hosts the gate already verified in scope (the request's primary
         # target). Subprocess tools may address them by a resolved IP.
         self.approved_hosts: set = set()
         self.approved_nets: list = []
         self._approved_ips = None
+        self._sock_ok: dict = {}      # SCOPE-GUARD-SOCKET-V1 decision cache
 
     @property
     def profile_id(self) -> str:
@@ -578,7 +581,12 @@ def install_transport_guards() -> None:
                 def _mk(_orig):
                     async def _vl_resolve(self, host, *a, **kw):
                         _real = _hh._REVERSE.get(str(host).lower()) if "_" not in str(host) else None
-                        return await _orig(self, _real or host, *a, **kw)
+                        _res = await _orig(self, _real or host, *a, **kw)
+                        try:   # SCOPE-GUARD-SOCKET-V1: remember ip -> name
+                            _note_resolved(str(host), [r.get("host") for r in _res or ()])
+                        except Exception:
+                            pass
+                        return _res
                     return _vl_resolve
                 _cls.resolve = _mk(_o_resolve)
                 _cls._vl_host_patched = True
@@ -615,6 +623,7 @@ def install_transport_guards() -> None:
         _sp.Popen._execute_child = _vl_execute_child
     except Exception as e:  # pragma: no cover
         log.warning("subprocess scope guard not installed: %s", e)
+    _install_socket_guard()
     log.info("SCOPE-GUARD-V1 transport guards installed")
 
 
@@ -984,6 +993,189 @@ def guard_subprocess_argv(args) -> None:
         raise e
 
 
+def browser_url_allowed(url: str, ctx: Optional["ScanContext"] = None) -> bool:
+    """SCOPE-GUARD-BROWSER-V1: decision for a request a headless browser is
+    about to make (Chromium does its own networking, outside every Python
+    hook). Records blocks on the scan context. Non-network schemes pass."""
+    ctx = ctx or current()
+    if ctx is None:
+        return True
+    u = str(url or "")
+    if not u.lower().startswith(("http://", "https://", "ws://", "wss://")):
+        return True
+    ok, cat, why = classify(u, ctx)
+    if not ok:
+        ctx.record(cat, u, why)
+        log.info("scope: browser request %s blocked (%s: %s) profile=%s",
+                 u[:200], cat, why, ctx.profile_id)
+    return ok
+
+
+# ── SCOPE-GUARD-SOCKET-V1: raw-socket backstop ─────────────────────
+# HTTP clients are gated by URL and external binaries by argv, but in-process
+# protocol code (paramiko/ftplib/smtplib/impacket/ldap3 brute-forcers, raw
+# TCP probes, asyncio.open_connection port checks) opened sockets directly.
+# Every TCP connect made while a ScanContext is active is now checked: the IP
+# is mapped back to the host name(s) that resolved to it in this process and
+# that name (or the bare IP) must pass the same rules as subprocess targets.
+# Loopback and the platform's own services are always allowed; UDP is not
+# gated (resolver traffic). No ScanContext (LAB mode) -> no-op.
+import collections as _collections
+import socket as _socket
+
+_IP_NAMES: "_collections.OrderedDict[str, set]" = _collections.OrderedDict()
+_IP_NAMES_LOCK = threading.Lock()
+_IP_NAMES_MAX = 8192
+
+
+def _internal_names() -> set:
+    names = {"localhost", "postgres", "backend", "frontend", "vulnuslab_postgres",
+             "vulnuslab_backend", "vulnuslab_frontend"}
+    for u in (_INTERNAL_BASE, os.environ.get("DATABASE_URL", "")):
+        h = _host_of(u.split("@", 1)[-1] if "@" in u else u)
+        if h:
+            names.add(h)
+    names.update(x.strip().lower() for x in os.environ.get("VL_INTERNAL_HOSTS", "").split(",")
+                 if x.strip())
+    return names
+
+
+_INTERNAL_NAMES = _internal_names()
+
+
+def _note_resolved(name, ips) -> None:
+    n = str(name or "").strip().rstrip(".").lower()
+    if not n or _ip_literal(n) is not None:
+        return
+    with _IP_NAMES_LOCK:
+        for ip in ips or ():
+            ip = str(ip or "").split("%", 1)[0]
+            if not ip:
+                continue
+            s = _IP_NAMES.pop(ip, None) or set()
+            if len(s) < 16:
+                s.add(n)
+            _IP_NAMES[ip] = s
+        while len(_IP_NAMES) > _IP_NAMES_MAX:
+            _IP_NAMES.popitem(last=False)
+
+
+def _names_for(ip: str) -> set:
+    with _IP_NAMES_LOCK:
+        return set(_IP_NAMES.get(ip, ()))
+
+
+class ScopeBlockedSocket(ScopeBlockedMixin, ConnectionRefusedError):
+    """Raised instead of connecting to an out-of-scope host. A
+    ConnectionRefusedError subclass so protocol code fails cleanly."""
+
+
+def check_socket_target(host, port) -> None:
+    """Raise ScopeBlockedSocket if (host, port) is outside the active scope."""
+    ctx = current()
+    if ctx is None:
+        return
+    h = str(host or "").strip("[]").split("%", 1)[0].rstrip(".").lower()
+    if not h:
+        return
+    ip = _ip_literal(h)
+    if ip is not None and (ip.is_loopback or ip.is_unspecified):
+        return
+    names = _names_for(str(ip)) if ip is not None else {h}
+    if names & _INTERNAL_NAMES:
+        return
+    allow = _AUTH_ALLOW.get()
+    if allow and names & set(allow):
+        return
+    cands = sorted(names) or [h]
+    key = (tuple(cands), int(port or 0))
+    hit = ctx._sock_ok.get(key)
+    if hit is True:
+        return
+    if hit is None:
+        why = cat = ""
+        for n in cands:
+            hp = f"[{n}]" if ":" in n else n
+            chk = f"{hp}:{port}" if port else hp
+            try:
+                ok, cat, why = _decide_subprocess_target(ctx, "svc", chk, n, False)
+            except Exception as e:      # never break a connect on a parser bug
+                log.debug("socket scope decision failed for %s: %s", chk, e)
+                ok = True
+            if ok:
+                ctx._sock_ok[key] = True
+                ctx.bump("socket_in_scope")
+                return
+        hit = (cat or "blocked_out_of_scope", why)
+        ctx._sock_ok[key] = hit
+    cat, why = hit
+    what = f"{cands[0]}:{port}" if port else cands[0]
+    ctx.record(cat, f"socket:{what}", why)
+    ctx.bump("socket_blocked")
+    log.info("scope: socket connect %s blocked (%s: %s) profile=%s", what, cat, why, ctx.profile_id)
+    e = ScopeBlockedSocket(f"VulnusLab {cat}: connection to {what} refused - out of scope "
+                           f"for this target profile ({why})")
+    e.category = cat
+    raise e
+
+
+def _install_socket_guard() -> None:
+    try:
+        _o_gai = _socket.getaddrinfo
+
+        def _vl_getaddrinfo(host, *a, **kw):
+            res = _o_gai(host, *a, **kw)
+            if isinstance(host, (str, bytes)) and host:
+                try:
+                    _note_resolved(os.fsdecode(host) if isinstance(host, bytes) else host,
+                                   [r[4][0] for r in res])
+                except Exception:
+                    pass
+            return res
+        _socket.getaddrinfo = _vl_getaddrinfo
+
+        _o_connect = _socket.socket.connect
+        _o_connect_ex = _socket.socket.connect_ex
+
+        def _gate(sock, address):
+            if _SCAN_CTX.get() is None:
+                return
+            if sock.family not in (_socket.AF_INET, _socket.AF_INET6):
+                return
+            if sock.type != _socket.SOCK_STREAM:
+                return
+            if isinstance(address, tuple) and len(address) >= 2:
+                check_socket_target(address[0], address[1])
+
+        def _vl_connect(self, address):
+            _gate(self, address)
+            return _o_connect(self, address)
+
+        def _vl_connect_ex(self, address):
+            try:
+                _gate(self, address)
+            except ScopeBlockedSocket:
+                import errno
+                return errno.ECONNREFUSED
+            return _o_connect_ex(self, address)
+        _socket.socket.connect = _vl_connect
+        _socket.socket.connect_ex = _vl_connect_ex
+
+        # uvloop's create_connection never calls socket.connect, so gate the
+        # stream API the in-process probes use as well.
+        import asyncio.streams as _as
+        _o_open = _as.open_connection
+
+        async def _vl_open_connection(host=None, port=None, *a, **kw):
+            if _SCAN_CTX.get() is not None and host and not kw.get("sock"):
+                check_socket_target(host, port)
+            return await _o_open(host, port, *a, **kw)
+        _as.open_connection = _vl_open_connection
+        asyncio.open_connection = _vl_open_connection
+    except Exception as e:  # pragma: no cover
+        log.warning("socket scope guard not installed: %s", e)
+
+
 # ── HTTP gate (called from main.py middleware) ─────────────────────
 def _tool_name(path: str) -> str:
     return (path or "").rstrip("/").rsplit("/", 1)[-1] or "scan"
@@ -1130,16 +1322,17 @@ async def annotate_response(response, ctx: ScanContext):
     if isinstance(data, dict):
         data["scope_enforcement"] = summary
         reached = summary["in_scope"] + summary.get("subprocess_in_scope", 0)
-        sp_blocked = summary.get("subprocess_blocked", 0)
+        sp_blocked = summary.get("subprocess_blocked", 0) + summary.get("socket_blocked", 0)
+        sp_reached = summary.get("subprocess_in_scope", 0) + summary.get("socket_in_scope", 0)
         findings = data.get("findings") if isinstance(data.get("findings"), list) else []
         actionable = [f for f in findings if not isinstance(f, dict) or str(
             f.get("severity") or "").upper() not in ("POSITIVE", "INFO", "PASS", "NONE", "")]
-        if sp_blocked and not summary.get("subprocess_in_scope") and not actionable:
+        if sp_blocked and not sp_reached and not actionable:
             # SCOPE-GUARD-SUBPROC-V1: the tool's external scanner was refused
             # (out-of-scope target) and nothing else produced a real finding.
             # Drop "clean" claims and report SKIPPED, never a silent pass.
             sample = next((x for x in summary.get("blocked_samples") or []
-                           if str(x.get("url", "")).startswith("subprocess:")), {})
+                           if str(x.get("url", "")).startswith(("subprocess:", "socket:"))), {})
             kept = [f for f in findings if not (isinstance(f, dict) and str(
                 f.get("severity") or "").upper() in ("POSITIVE", "PASS"))]
             data["findings"] = kept
@@ -1147,7 +1340,7 @@ async def annotate_response(response, ctx: ScanContext):
                 data["total"] = len(kept)
             cat = ("outside_window" if sample.get("category") == "blocked_outside_window"
                    else "out_of_scope")
-            what = str(sample.get("url") or "subprocess: target")[len("subprocess:"):].strip()
+            what = str(sample.get("url") or "subprocess: target").split(":", 1)[1].strip()
             data.update({"status": "SKIPPED", "_skipped": True, "skipped": True,
                          "skip_category": cat, "vulnerable": False,
                          "skipped_reason": (f"External scanner not launched: {what[:200]} is "

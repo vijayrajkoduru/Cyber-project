@@ -296,6 +296,25 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
                     except Exception as _e:
                         errors.append(f"auth-cookie inject failed: {str(_e)[:80]}")
 
+            # SCOPE-GUARD-BROWSER-V1 — Chromium bypasses the Python transport
+            # hooks, so in CUSTOMER mode every browser request is scope-checked
+            # (out-of-scope links / third-party hosts are aborted, not fetched).
+            try:
+                from tools._core import scope_guard as _sg
+                _sgc = _sg.current()
+            except Exception:
+                _sg, _sgc = None, None
+            if _sgc is not None:
+                async def _vl_scope_route(route, _c=_sgc):
+                    try:
+                        if _sg.browser_url_allowed(route.request.url, _c):
+                            await route.continue_()
+                        else:
+                            await route.abort("blockedbyclient")
+                    except Exception:
+                        pass
+                await context.route("**/*", _vl_scope_route)
+
             page = await context.new_page()
 
             # Intercept every request the SPA makes — that's how we

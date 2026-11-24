@@ -140,7 +140,7 @@ def _analyze_handler(src: str) -> dict:
     return out
 
 
-def _sync_playwright_run(target: str, ua: str, wait_ms: int) -> dict:
+def _sync_playwright_run(target: str, ua: str, wait_ms: int, scope_ctx=None) -> dict:
     """Sync helper run inside a thread executor — Playwright sync API
     can't be called from inside an already-running asyncio loop."""
     try:
@@ -160,6 +160,18 @@ def _sync_playwright_run(target: str, ua: str, wait_ms: int) -> dict:
                                            ignore_https_errors=True,
                                            viewport={"width": 1280, "height": 800})
                 ctx.add_init_script(PRELOAD_JS)
+                if scope_ctx is not None:   # SCOPE-GUARD-BROWSER-V1
+                    from tools._core.scope_guard import browser_url_allowed
+
+                    def _vl_scope_route(route):
+                        try:
+                            if browser_url_allowed(route.request.url, scope_ctx):
+                                route.continue_()
+                            else:
+                                route.abort("blockedbyclient")
+                        except Exception:
+                            pass
+                    ctx.route("**/*", _vl_scope_route)
                 page = ctx.new_page()
                 final_url = ""
                 status = 0
@@ -202,10 +214,15 @@ async def gather(ctx: ScanContext):
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
 
+    try:
+        from tools._core.scope_guard import current as _scope_current
+        _scope_ctx = _scope_current()
+    except Exception:
+        _scope_ctx = None
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(
-            None, _sync_playwright_run, target, ua, wait_ms
+            None, _sync_playwright_run, target, ua, wait_ms, _scope_ctx
         )
     except Exception as e:
         ctx.state["postmessage_error"] = f"executor failed: {type(e).__name__}: {str(e)[:120]}"
