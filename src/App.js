@@ -12916,6 +12916,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
           sessionCookie = lr.auth_cookie || "";
           sessionBearer = lr.auth_bearer || "";
           setAuthCookie(sessionCookie); setAuthBearer(sessionBearer);
+          _authHostRef.current = vlAuthHost(target);   // AUTH-SCOPE-V2
           setAuthStatus("ok");
           add(`[\u2713] Logged in as ${loginUser} \u2014 session captured`);
         } else {
@@ -13647,8 +13648,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
                         if (lr && (lr.login_verified || _got)) {
                           // COOKIE-PRAGMATIC-V1 — if we got a session cookie/bearer, USE IT
                           // even if verification was uncertain (Tomcat/WebGoat false-negatives)
+                          // AUTH-SCOPE-V2: a new login fully REPLACES the old session (a
+                          // Juice Shop JWT must not survive a DVWA login that returns
+                          // only a cookie) and is bound to this host, so changing the
+                          // target afterwards drops it.
                           setAuthCookie(lr.auth_cookie || "");
-                          if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
+                          setAuthBearer(lr.auth_bearer || "");
+                          _authHostRef.current = vlAuthHost(target);
                           setAuthStatus("ok");
                           setRAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
                         } else {

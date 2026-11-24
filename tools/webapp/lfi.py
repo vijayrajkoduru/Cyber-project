@@ -151,10 +151,17 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     _wallclock_start = _time.time()
     _WALLCLOCK_BUDGET = 60.0
     _bailed = False
+    # LFI-DEDUPE-V1 — the crawler records fi/?page=include.php, ?page=file1.php,
+    # ?page=file2.php ... as separate URLs, so the same sink was confirmed and
+    # reported up to 5x. One finding per (path, param); later URLs skip it
+    # (which also frees budget for other params).
+    _lfi_hits = set()
     for tu_url, tu_parsed, params in test_urls[:12]:
         if _bailed: break
         for key in list(params.keys())[:3]:
             if _bailed: break
+            if (tu_parsed.path.rstrip("/"), key) in _lfi_hits:
+                continue
             # BASELINE-DIFF-V1 — fetch the endpoint with a benign value for
             # THIS param. A marker only confirms LFI if it appears in the
             # injected response AND is ABSENT from this baseline. That makes
@@ -199,6 +206,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                      f"(absent from baseline)")))
                 confirmed.append({"param": key, "payload": entry["payload"],
                                   "category": entry["category"]})
+                _lfi_hits.add((tu_parsed.path.rstrip("/"), key))
                 break
             else:
                 continue
@@ -221,6 +229,8 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                         key=lambda n: -sum(1 for h in _LFI_HINTS if h in n.lower()))
         for key in fields[:3]:
             if _post_bailed: break
+            if ("POST " + urlparse(action).path.rstrip("/"), key) in _lfi_hits:
+                continue
             _bl = pf.submit(form, req, key, "1", timeout=12)
             baseline_body = ((_bl.text or "")[:50000]
                              if (_bl is not None and _bl.status_code == 200) else None)
@@ -256,6 +266,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                      f"(absent from baseline)")))
                 confirmed.append({"param": key, "payload": entry["payload"], "url": action,
                                   "category": entry["category"], "method": "POST"})
+                _lfi_hits.add(("POST " + urlparse(action).path.rstrip("/"), key))
                 break
             else:
                 continue
