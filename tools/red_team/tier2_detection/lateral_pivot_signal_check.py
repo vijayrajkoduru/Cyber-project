@@ -39,7 +39,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.lateral_pivot_signal_check_findings import (
     LATERAL_PIVOT_SIGNAL_CHECK_FINDING_RULES,
@@ -178,6 +178,11 @@ async def gather(ctx: ScanContext):
     if not methods:
         methods = ["psexec", "wmiexec", "smbexec"]
 
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(target, "lateral_pivot_signal_check")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     results: list[dict] = []
     missing_bins: list[str] = []
     for method in methods:

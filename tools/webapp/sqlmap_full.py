@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends
 
-from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding
+from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, subprocess_scope_skip
 from tools.webapp._webapp_common import precheck_target, vuln_response
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
@@ -149,6 +149,11 @@ def scan_sqlmap_full(req: ScanRequest, payload=Depends(verify_scan_quota)):
             what_checked="sqlmap full SQLi battery (binary missing)",
             tests_summary="sqlmap not installed",
         )
+
+    # SCOPE-GUARD-SUBPROC-V1: never launch sqlmap at an out-of-scope target.
+    skip = subprocess_scope_skip("sqlmap_full", base, req.target)
+    if skip:
+        return skip
 
     exit_code, stdout, stderr = _run_sqlmap(base)
 

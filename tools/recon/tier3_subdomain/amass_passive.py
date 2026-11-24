@@ -1,7 +1,7 @@
 """Amass Passive v2 — VL-FORGE. amass binary if available, fallback to API merge."""
 import asyncio, shutil, requests, json
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._shared import ScanRequest, verify_scan_quota, recon_host, subprocess_scope_block
 from tools._vl_core import run_scanner
 router=APIRouter()
 _AMASS=shutil.which("amass")
@@ -23,6 +23,11 @@ async def gather(ctx):
     h=ctx.host; subs=set(); used_amass=False
     if _AMASS:
         ctx.source("amass-cli")
+        # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+        _scope_why = subprocess_scope_block(h, "amass_passive")
+        if _scope_why:
+            ctx.state["skipped_reason"] = _scope_why
+            return
         for s in await _amass_cli(h): subs.add(s)
         used_amass=True
     else:

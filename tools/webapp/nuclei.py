@@ -13,7 +13,7 @@ import os
 import shutil
 import subprocess
 from fastapi import APIRouter, Depends
-from tools._shared import (ScanRequest, verify_scan_quota, web_url,
+from tools._shared import (ScanRequest, verify_scan_quota, web_url, subprocess_scope_skip,
                             wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response
 from tools._vl_core.turbo import vl_turbo
@@ -59,6 +59,10 @@ def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
             pass
 
     target = web_url(req.target)
+    # SCOPE-GUARD-SUBPROC-V1
+    skip = subprocess_scope_skip("nuclei", target, req.target)
+    if skip:
+        return skip
     cmd = [_which(), "-target", target, "-jsonl",
            "-severity", "high,critical", "-tags", "exposure,cve,misconfig",
            "-exclude-tags", "dos,intrusive,fuzz",

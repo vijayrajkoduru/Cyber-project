@@ -603,6 +603,35 @@ def destructive_skip(req, tool: str):
     return _ds(req, tool)
 
 
+def subprocess_scope_block(targets, tool: str = "subprocess"):
+    """SCOPE-GUARD-SUBPROC-V1: call right before launching an external binary
+    (nmap, nuclei, sqlmap, hydra ...) with the host(s)/URL(s)/IP(s)/CIDR(s) it
+    will be handed. Returns None when allowed (always in LAB mode, so lab_*
+    targets are unaffected), else a SKIPPED reason string - the caller must
+    not launch and must surface the reason (never report a clean result).
+    See tools/_core/scope_guard.py."""
+    from tools._core.scope_guard import subprocess_scope_block as _b
+    return _b(targets, tool)
+
+
+def subprocess_scope_skip(tool: str, targets, report_target=None):
+    """Like subprocess_scope_block() but returns the standard SKIPPED response
+    dict (status SKIPPED, skip_category out_of_scope), or None when allowed.
+        skip = subprocess_scope_skip("nikto", base, req.target)
+        if skip: return skip
+    """
+    from tools._core.scope_guard import subprocess_scope_skip as _s
+    return _s(tool, targets, report_target)
+
+
+def kubeconfig_scope_block(kubeconfig_text: str, tool: str = "kubectl"):
+    """subprocess_scope_block() for tools that read their target (the API
+    server) from a KUBECONFIG file instead of argv."""
+    from tools._core.scope_guard import kubeconfig_servers, subprocess_scope_block as _b
+    servers = kubeconfig_servers(kubeconfig_text)
+    return _b(servers, tool) if servers else None
+
+
 def verify_admin(payload=Depends(verify_token)):
     """Admin-only gate. Use on every /api/admin/* endpoint.
     Raises 403 if the role was not live-verified against the DB, or is not admin."""

@@ -32,7 +32,7 @@ import subprocess
 import tempfile
 from typing import Optional
 
-from tools._shared import wrap_finding
+from tools._shared import wrap_finding, kubeconfig_scope_block
 
 
 _KUBECTL_TIMEOUT = 30
@@ -119,6 +119,9 @@ def _kubectl(args, kubeconfig_text, timeout=_KUBECTL_TIMEOUT):
     Returns (exit_code, stdout, stderr). Auto-shreds the tempfile on exit."""
     if shutil.which("kubectl") is None:
         return 127, "", "kubectl binary not installed"
+    _scope_why = kubeconfig_scope_block(kubeconfig_text, "kubectl")   # SCOPE-GUARD-SUBPROC-V1
+    if _scope_why:
+        return 126, "", _scope_why
     fd, path = tempfile.mkstemp(prefix="vl-kc-", suffix=".yaml")
     try:
         os.write(fd, kubeconfig_text.encode("utf-8"))
@@ -632,6 +635,10 @@ def _probe_kube_bench_node(target, req):
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Rebuild backend with Dockerfile that installs kube-bench.",
             evidence_marker="kube-bench not in PATH")], 0, "kube-bench missing")
+    _scope_why = kubeconfig_scope_block(kc, "kube-bench")   # SCOPE-GUARD-SUBPROC-V1
+    if _scope_why:
+        from tools._core.scope_guard import skip_payload
+        return skip_payload("kube_bench_node", target, _scope_why, "out_of_scope")
     # kube-bench run --json against the cluster (requires kubeconfig)
     fd, path = tempfile.mkstemp(prefix="vl-kc-", suffix=".yaml")
     try:

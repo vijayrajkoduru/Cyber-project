@@ -75,7 +75,7 @@ from urllib.parse import urlparse, urljoin
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.patator_http_form_brute_findings import PATATOR_HTTP_FORM_BRUTE_FINDING_RULES
@@ -455,6 +455,11 @@ class PatatorHttpFormBrute(MethodologyScanner):
         timeout = min(max(int(opts.get("timeout_sec") or DEFAULT_TIMEOUT), 30), 240)
         action_url = fp.get("form_action") or form_url
 
+        # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+        _scope_why = subprocess_scope_block(action_url, "patator_http_form_brute")
+        if _scope_why:
+            ctx.state["deep_skipped"] = _scope_why
+            return []
         user_path = pass_path = None
         try:
             user_path = _write_tempfile("users", users)

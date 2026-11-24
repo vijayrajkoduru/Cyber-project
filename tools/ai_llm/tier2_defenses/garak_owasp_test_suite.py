@@ -28,7 +28,7 @@ import tempfile
 import shutil
 from typing import Optional
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.garak_owasp_test_suite_findings import (
     GARAK_OWASP_TEST_SUITE_FINDING_RULES,
@@ -277,6 +277,11 @@ async def gather(ctx: ScanContext):
         ctx.source("invalid target")
         return
 
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(target, "garak_owasp_test_suite")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     opts = getattr(ctx, "options", None) or {}
     bearer = getattr(ctx, "auth_bearer", None)
 

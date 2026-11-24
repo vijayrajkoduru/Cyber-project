@@ -70,10 +70,31 @@ def _exec(cmd: list[str], *, timeout: int = 60, input_data: Optional[str] = None
         return {"ok": False, "stdout": "", "stderr": "",
                 "returncode": -1, "duration_s": round(time.monotonic() - t0, 2),
                 "skipped": f"timed out at {timeout}s", "raw_cmd": raw_cmd}
+    except PermissionError as e:
+        if getattr(e, "category", None):      # ScopeBlockedSubprocess backstop
+            return {"ok": False, "stdout": "", "stderr": "", "returncode": -1,
+                    "duration_s": 0.0, "skipped": str(e)[:300], "scope_blocked": True,
+                    "raw_cmd": raw_cmd}
+        return {"ok": False, "stdout": "", "stderr": str(e)[:500],
+                "returncode": -1, "duration_s": round(time.monotonic() - t0, 2),
+                "skipped": f"execution failed: {str(e)[:200]}", "raw_cmd": raw_cmd}
     except Exception as e:
         return {"ok": False, "stdout": "", "stderr": str(e)[:500],
                 "returncode": -1, "duration_s": round(time.monotonic() - t0, 2),
                 "skipped": f"execution failed: {str(e)[:200]}", "raw_cmd": raw_cmd}
+
+
+def _scope_blocked(tool: str, target: str) -> Optional[dict]:
+    """SCOPE-GUARD-SUBPROC-V1: refuse to launch against a target outside the
+    active target profile's scope (no-op in LAB mode). Returns the standard
+    skipped dict, or None when allowed."""
+    from tools._core.scope_guard import subprocess_scope_block
+    reason = subprocess_scope_block(target, tool)
+    if reason is None:
+        return None
+    return {"ok": False, "stdout": "", "stderr": "", "returncode": -1,
+            "duration_s": 0.0, "skipped": reason, "scope_blocked": True,
+            "raw_cmd": ""}
 
 
 def _missing(bin_name: str) -> dict:
@@ -91,6 +112,9 @@ def _missing(bin_name: str) -> dict:
 def run_nmap(target: str, *, ports: str = "top1000", flags: Optional[list[str]] = None,
               timeout: int = 120) -> dict:
     """Run nmap against target. Default: top 1000 ports, service version detection."""
+    blocked = _scope_blocked("nmap", target)
+    if blocked:
+        return blocked
     nmap = _which("nmap")
     if not nmap:
         return _missing("nmap")
@@ -109,6 +133,9 @@ def run_nmap(target: str, *, ports: str = "top1000", flags: Optional[list[str]] 
 def run_nmap_nse(target: str, *, scripts: str, ports: Optional[str] = None,
                   timeout: int = 180) -> dict:
     """Run nmap with an NSE script category (vuln, default, discovery, etc.)."""
+    blocked = _scope_blocked("nmap", target)
+    if blocked:
+        return blocked
     nmap = _which("nmap")
     if not nmap:
         return _missing("nmap")
@@ -121,6 +148,9 @@ def run_nmap_nse(target: str, *, scripts: str, ports: Optional[str] = None,
 
 def run_amass(target: str, *, mode: str = "passive", timeout: int = 240) -> dict:
     """Run amass for subdomain enumeration."""
+    blocked = _scope_blocked("amass", target)
+    if blocked:
+        return blocked
     amass = _which("amass")
     if not amass:
         return _missing("amass")
@@ -137,6 +167,9 @@ def run_amass(target: str, *, mode: str = "passive", timeout: int = 240) -> dict
 def run_hydra(target: str, *, service: str, userlist: str, passlist: str,
                port: Optional[int] = None, timeout: int = 180) -> dict:
     """Run hydra for credential spraying. Authorized testing only."""
+    blocked = _scope_blocked("hydra", target)
+    if blocked:
+        return blocked
     hydra = _which("hydra")
     if not hydra:
         return _missing("hydra")
@@ -153,6 +186,9 @@ def run_hydra(target: str, *, service: str, userlist: str, passlist: str,
 
 def run_nikto(target: str, *, timeout: int = 180) -> dict:
     """Run nikto for web server misconfig + vulnerability scanning."""
+    blocked = _scope_blocked("nikto", target)
+    if blocked:
+        return blocked
     nikto = _which("nikto")
     if not nikto:
         return _missing("nikto")
@@ -163,6 +199,9 @@ def run_nikto(target: str, *, timeout: int = 180) -> dict:
 def run_gobuster(target: str, *, mode: str = "dir", wordlist: str,
                   extensions: Optional[str] = None, timeout: int = 180) -> dict:
     """Run gobuster for directory / DNS / vhost enumeration."""
+    blocked = _scope_blocked("gobuster", target)
+    if blocked:
+        return blocked
     gobuster = _which("gobuster")
     if not gobuster:
         return _missing("gobuster")
@@ -177,6 +216,9 @@ def run_wpscan(target: str, *, api_token: Optional[str] = None,
                 timeout: int = 240) -> dict:
     """Run wpscan against a WordPress target. API token optional but
     unlocks vulnerability database matches."""
+    blocked = _scope_blocked("wpscan", target)
+    if blocked:
+        return blocked
     wpscan = _which("wpscan")
     if not wpscan:
         return _missing("wpscan")
@@ -191,6 +233,9 @@ def run_sqlmap(target: str, *, data: Optional[str] = None,
                 cookie: Optional[str] = None, timeout: int = 240) -> dict:
     """Run sqlmap. Always uses --batch (non-interactive) and low risk/level
     for safe automated runs."""
+    blocked = _scope_blocked("sqlmap", target)
+    if blocked:
+        return blocked
     sqlmap = _which("sqlmap")
     if not sqlmap:
         return _missing("sqlmap")

@@ -1,7 +1,7 @@
 """Real nuclei scan (cve/network/exposure templates) - primary Kali engine. VL-FORGE Vuln §1 #3 + §2."""
 import asyncio, json, shutil
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
+from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url, subprocess_scope_block
 from tools._vl_core import run_scanner
 from tools._vl_core.verify import vl_verify
 router = APIRouter()
@@ -38,6 +38,11 @@ async def _run(target):
     return {"rows": rows, "partial": partial}, None
 async def gather(ctx):
     target = web_url(str(ctx.host)).rstrip("/")
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(target, "nuclei_network_cve")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     res, err = await _run(target)
     if err:
         ctx.state["skipped_reason"] = err; return

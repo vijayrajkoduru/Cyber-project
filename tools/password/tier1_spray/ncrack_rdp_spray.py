@@ -82,7 +82,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.ncrack_rdp_spray_findings import NCRACK_RDP_SPRAY_FINDING_RULES
@@ -196,6 +196,8 @@ def _parse_ncrack_success(stdout: str) -> list[tuple[str, str, str, int]]:
 async def _ncrack_single_pair(host: str, port: int, user: str, pwd: str,
                               timeout: float) -> tuple[bool, str]:
     """Run ncrack against a single (user, pwd) pair. Returns (success, raw_stdout)."""
+    if subprocess_scope_block(host, "ncrack_rdp_spray"):   # SCOPE-GUARD-SUBPROC-V1
+        return (False, "")
     if not NCRACK_BIN:
         return (False, "")
     cmd = [
@@ -447,6 +449,11 @@ class NcrackRdpSpray(MethodologyScanner):
         passwords = _split_lines(passlist_raw, max_pass)
         if not users or not passwords:
             ctx.state["deep_skipped"] = "empty wordlists after dedupe"
+            return []
+        # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+        _scope_why = subprocess_scope_block(host, "ncrack_rdp_spray")
+        if _scope_why:
+            ctx.state["deep_skipped"] = _scope_why
             return []
         timeout = min(max(int(opts.get("timeout_sec") or DEFAULT_TIMEOUT), 15), 600)
 

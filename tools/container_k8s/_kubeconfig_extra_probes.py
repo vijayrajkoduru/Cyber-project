@@ -28,7 +28,7 @@ import subprocess
 import tempfile
 from typing import Optional
 
-from tools._shared import wrap_finding
+from tools._shared import wrap_finding, kubeconfig_scope_block
 
 
 def _ndr(slug, target, reason=""):
@@ -74,6 +74,9 @@ def _get_kc(req):
 def _kubectl(args, kc, timeout=20):
     if shutil.which("kubectl") is None:
         return 127, "", "kubectl missing"
+    _scope_why = kubeconfig_scope_block(kc, "kubectl")   # SCOPE-GUARD-SUBPROC-V1
+    if _scope_why:
+        return 126, "", _scope_why
     fd, path = tempfile.mkstemp(prefix="vl-kc-", suffix=".yaml")
     try:
         os.write(fd, kc.encode("utf-8")); os.close(fd); os.chmod(path, 0o600)

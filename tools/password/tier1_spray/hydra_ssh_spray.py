@@ -70,7 +70,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.hydra_ssh_spray_findings import HYDRA_SSH_SPRAY_FINDING_RULES
@@ -236,6 +236,11 @@ class HydraSshSpray(MethodologyScanner):
         passwords = _split_lines(passlist_raw, max_pass)
         if not users or not passwords:
             ctx.state["deep_skipped"] = "empty wordlists after dedupe"
+            return []
+        # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+        _scope_why = subprocess_scope_block(target, "hydra_ssh_spray")
+        if _scope_why:
+            ctx.state["deep_skipped"] = _scope_why
             return []
         timeout = min(max(int(opts.get("timeout_sec") or DEFAULT_TIMEOUT), 15), 240)
 

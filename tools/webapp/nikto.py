@@ -22,7 +22,7 @@ import subprocess
 
 from fastapi import APIRouter, Depends
 
-from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding
+from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, subprocess_scope_skip
 from tools.webapp._webapp_common import precheck_target, vuln_response
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
@@ -186,6 +186,11 @@ def scan_nikto(req: ScanRequest, payload=Depends(verify_scan_quota)):
             what_checked="nikto web-vulnerability scan (binary missing)",
             tests_summary="nikto not installed",
         )
+
+    # SCOPE-GUARD-SUBPROC-V1: never launch nikto at an out-of-scope target.
+    skip = subprocess_scope_skip("nikto", _build_target_arg(base), req.target)
+    if skip:
+        return skip
 
     # Real execution.
     exit_code, stdout, stderr = _run_nikto(base, timeout_s=90)

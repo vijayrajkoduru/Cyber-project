@@ -28,7 +28,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.msf_auxiliary_scan_findings import (
     MSF_AUXILIARY_SCAN_FINDING_RULES,
@@ -108,6 +108,11 @@ async def gather(ctx: ScanContext):
 
     timeout = min(max(int(opts.get("timeout_sec") or DEFAULT_TIMEOUT), 30), HARD_MAX_TIMEOUT)
 
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block([rhosts] + [str(v) for k, v in extras.items() if str(k).upper() in ("RHOSTS", "RHOST", "VHOST", "HOST", "HOSTS", "TARGET", "TARGETS") and v], "msf_auxiliary_scan")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     script = _build_resource_script(module, rhosts, rport_str, extras)
     cmd = [MSFCONSOLE_BIN, "-q", "-x", script]
 

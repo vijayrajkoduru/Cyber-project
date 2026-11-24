@@ -2,7 +2,7 @@
 import asyncio, shutil
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._shared import ScanRequest, verify_scan_quota, recon_host, subprocess_scope_block
 from tools._vl_core import run_scanner
 router=APIRouter()
 _NMAP=shutil.which("nmap")
@@ -27,6 +27,11 @@ async def gather(ctx):
     ctx.state["nmap_installed"]=bool(_NMAP)
     if not _NMAP: return
     ctx.source("nmap-nse-vuln")
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(ips[0], "nse_vuln_scan")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     output=await _nmap_run(ips[0])
     if not output: return
     # Parse vuln findings

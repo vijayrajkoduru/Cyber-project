@@ -27,9 +27,12 @@ modules, and a central registry of destructive routes that the gate skips
 import asyncio
 import contextvars
 import fnmatch
+import ipaddress
 import json
 import logging
 import os
+import re
+import shlex
 import threading
 import time
 from contextlib import contextmanager
@@ -107,7 +110,7 @@ def is_destructive_route(path: str) -> bool:
 # ── Scan context ───────────────────────────────────────────────────
 class ScanContext:
     __slots__ = ("rt", "user_id", "path", "passive", "lock", "stats", "samples",
-                 "auth_role", "auth_mode")
+                 "auth_role", "auth_mode", "approved_hosts", "approved_nets", "_approved_ips")
 
     def __init__(self, rt, user_id: str, path: str = "", auth_role: Optional[str] = None,
                  auth_mode: Optional[str] = None):
@@ -120,8 +123,14 @@ class ScanContext:
         self.lock = threading.Lock()
         self.stats = {"in_scope": 0, "third_party_intel": 0, "auth_provider": 0,
                       "blocked_out_of_scope": 0, "blocked_outside_window": 0,
-                      "blocked_rate_limit": 0, "rate_limit_wait_sec": 0.0}
+                      "blocked_rate_limit": 0, "rate_limit_wait_sec": 0.0,
+                      "subprocess_in_scope": 0, "subprocess_blocked": 0}
         self.samples: list = []
+        # Hosts the gate already verified in scope (the request's primary
+        # target). Subprocess tools may address them by a resolved IP.
+        self.approved_hosts: set = set()
+        self.approved_nets: list = []
+        self._approved_ips = None
 
     @property
     def profile_id(self) -> str:
@@ -134,6 +143,44 @@ class ScanContext:
                 self.stats["rate_limit_wait_sec"] = round(self.stats["rate_limit_wait_sec"] + wait, 2)
             if category.startswith("blocked") and len(self.samples) < 10:
                 self.samples.append({"url": url[:300], "category": category, "reason": reason[:200]})
+
+    def approve(self, target: str) -> None:
+        """Mark a gate-verified scan target as approved for subprocess tools."""
+        t = (target or "").strip()
+        if "/" in t and "://" not in t:
+            try:
+                net = ipaddress.ip_network(t, strict=False)
+            except ValueError:
+                net = None
+            if net is not None:
+                with self.lock:
+                    self.approved_nets.append(net)
+                return
+        h = _host_of(t) if t else ""
+        if h:
+            with self.lock:
+                self.approved_hosts.add(h.strip("[]"))
+                self._approved_ips = None
+
+    def approved_ips(self) -> set:
+        with self.lock:
+            if self._approved_ips is not None:
+                return self._approved_ips
+            hosts = set(self.approved_hosts)
+        from tools._core.target_profile import _ip_of, _resolve
+        ips = set()
+        for h in hosts:
+            if _ip_of(h) is not None:
+                ips.add(str(_ip_of(h)))
+            else:
+                ips.update(_resolve(h))
+        with self.lock:
+            self._approved_ips = ips
+        return ips
+
+    def bump(self, key: str, n: int = 1) -> None:
+        with self.lock:
+            self.stats[key] = self.stats.get(key, 0) + n
 
     @property
     def blocked(self) -> int:
@@ -553,6 +600,21 @@ def install_transport_guards() -> None:
             return _o_submit(self, ctx.run, fn, *args, **kwargs)
         return _o_submit(self, fn, *args, **kwargs)
     _cf.ThreadPoolExecutor.submit = _vl_submit
+
+    # SCOPE-GUARD-SUBPROC-V1 backstop: every child process (subprocess.run /
+    # Popen / check_output and asyncio.create_subprocess_exec, which all end
+    # in Popen._execute_child) has its argv scope-checked before it starts.
+    try:
+        import subprocess as _sp
+        _o_exec_child = _sp.Popen._execute_child
+
+        def _vl_execute_child(self, args, *a, **kw):
+            if _SCAN_CTX.get() is not None:
+                guard_subprocess_argv(args)
+            return _o_exec_child(self, args, *a, **kw)
+        _sp.Popen._execute_child = _vl_execute_child
+    except Exception as e:  # pragma: no cover
+        log.warning("subprocess scope guard not installed: %s", e)
     log.info("SCOPE-GUARD-V1 transport guards installed")
 
 
@@ -591,6 +653,335 @@ def destructive_skip(req, tool: str) -> Optional[dict]:
                         "Destructive / state-changing test disabled by the target "
                         "profile (safety.destructive_allowed=false).",
                         "destructive_not_allowed")
+
+
+# ── Subprocess scope enforcement (SCOPE-GUARD-SUBPROC-V1) ──────────
+# The transport hooks above only see HTTP made from Python. Scanners that
+# shell out (nmap, nuclei, sqlmap, nikto, hydra, msfconsole, impacket ...) do
+# their own networking, so the gate's primary-target check was the only thing
+# between a request and an out-of-scope host (msf RHOSTS option, patator form
+# action URL, a resolved IP, a CIDR ...). Two layers, both pass-through when
+# no ScanContext is active (LAB mode / lab_* targets are untouched):
+#
+#   1. Explicit:  subprocess_scope_block(targets, tool) / subprocess_scope_skip()
+#      called by runners/tools right before they launch, with the exact
+#      host/URL/IP/CIDR handed to the binary. Strict: the target must be in
+#      scope (same ScopeRules + classify() used for HTTP traffic).
+#   2. Backstop:  subprocess.Popen._execute_child is hooked (asyncio's
+#      create_subprocess_exec goes through Popen as well). Network-looking
+#      argv tokens (URLs, IPs, CIDRs, IP ranges, user@host, host names) are
+#      checked before the process is created; a violation raises
+#      ScopeBlockedSubprocess and the process never starts.
+#
+# Every block is recorded on the ScanContext (category blocked_out_of_scope +
+# a subprocess_blocked counter), so annotate_response() turns a tool whose
+# external scanner never ran into status SKIPPED - never a silent clean.
+
+class ScopeBlockedSubprocess(ScopeBlockedMixin, PermissionError):
+    """Raised by the Popen backstop instead of launching an out-of-scope
+    subprocess. PermissionError so generic `except Exception` handlers keep
+    working; deliberately not FileNotFoundError (that reads as 'not installed')."""
+
+
+# Binaries whose arguments are lookup keys, not hosts they connect to.
+QUERY_ONLY_BINARIES = frozenset({"whois", "jwhois", "dig", "host", "nslookup", "drill", "delv"})
+
+# Bare-hostname-looking values of these flags are names/files (AD domain,
+# user, wordlist, template, output file ...), not targets. URLs / IPs after
+# them are still checked.
+_NON_TARGET_FLAGS = frozenset({
+    "-d", "--domain", "-u", "--user", "--username", "-U", "-p", "--password", "-P",
+    "-o", "-oX", "-oN", "-oG", "-oA", "-oJ", "--output", "--output-dir", "-w",
+    "--wordlist", "-t", "-templates", "--templates", "-l", "-L", "-c", "--config",
+    "-H", "--header", "--script", "--script-args", "-x", "-f", "--file", "-b",
+})
+_FILE_EXTS = frozenset({
+    "json", "jsonl", "xml", "txt", "csv", "yaml", "yml", "nse", "py", "sh", "log", "html",
+    "htm", "conf", "cfg", "ini", "lst", "dic", "gz", "zip", "tar", "tgz", "pcap", "pcapng",
+    "cap", "hccapx", "hc22000", "apk", "ipa", "bin", "img", "so", "jar", "js", "rb", "pl",
+    "out", "db", "sqlite", "key", "pem", "crt", "der", "rc", "md", "lock", "toml", "sarif",
+})
+_HOST_RE = re.compile(
+    r"^(?=.{4,253}(?::\d{1,5})?$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+"
+    r"[a-z]{2,63}\.?(?::\d{1,5})?$", re.I)
+_URL_RE = re.compile(r"([a-z][a-z0-9+.\-]{1,15})://([^\s'\"<>;,|]+)", re.I)
+_RANGE_RE = re.compile(r"^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$")
+_WEB_SCHEMES = ("http", "https", "ws", "wss")
+
+
+def _ip_literal(s: str):
+    try:
+        return ipaddress.ip_address((s or "").strip("[]"))
+    except ValueError:
+        return None
+
+
+def _parse_target_token(tok: str) -> list:
+    """Network targets in ONE token -> [(kind, check, host)].
+    kind: url | svc | ip | cidr | host; `check` is what the scope rules see."""
+    t = (tok or "").strip().strip("'\"").rstrip(";,)")
+    if not t or len(t) > 2048:
+        return []
+    m = _URL_RE.search(t)
+    if m:
+        scheme, rest = m.group(1).lower(), m.group(2)
+        url = f"{scheme}://{rest}"
+        try:
+            p = urlparse(url)
+            host = (p.hostname or "").lower()
+            port = p.port
+        except ValueError:
+            return []
+        if not host:
+            return []
+        if scheme in _WEB_SCHEMES:
+            return [("url", url, host)]
+        hp = f"[{host}]" if ":" in host else host
+        return [("svc", f"{hp}:{port}" if port else hp, host)]
+    if "@" in t and not t.startswith("@"):
+        t = t.rsplit("@", 1)[1]                 # user@host, DOMAIN/user@host
+    t = t.lstrip("@").rstrip(".")
+    if "/" in t:
+        try:
+            net = ipaddress.ip_network(t, strict=False)
+        except ValueError:
+            return []
+        if net.num_addresses > 1:
+            return [("cidr", str(net), str(net.network_address))]
+        return [("ip", str(net.network_address), str(net.network_address))]
+    rm = _RANGE_RE.match(t)
+    if rm:                                       # nmap-style 10.0.0.1-50
+        ends = (f"{rm.group(1)}{rm.group(2)}", f"{rm.group(1)}{rm.group(3)}")
+        return [("ip", x, x) for x in ends if _ip_literal(x) is not None]
+    ip = _ip_literal(t)
+    if ip is not None:
+        return [("ip", str(ip), str(ip))]
+    if t.startswith("[") and "]:" in t:          # [v6]:port
+        h = t[1:t.index("]")]
+        if _ip_literal(h) is not None:
+            return [("ip", t, h)]
+    if t.count(":") == 1:
+        h, _, prt = t.partition(":")
+        if prt.isdigit() and _ip_literal(h) is not None:
+            return [("ip", t, h)]
+    if _HOST_RE.match(t):
+        return [("host", t, t.split(":", 1)[0].rstrip(".").lower())]
+    return []
+
+
+def _argv_list(args) -> list:
+    if isinstance(args, (str, bytes)):
+        a = os.fsdecode(args)
+        try:
+            return shlex.split(a)
+        except ValueError:
+            return a.split()
+    out = []
+    for a in args or ():
+        try:
+            out.append(os.fsdecode(a) if isinstance(a, (bytes, os.PathLike)) else str(a))
+        except Exception:
+            out.append(str(a))
+    return out
+
+
+def _is_local_ip(h: str) -> bool:
+    ip = _ip_literal(h)
+    return ip is not None and (ip.is_loopback or ip.is_unspecified)
+
+
+def argv_targets(args) -> list:
+    """Network targets in an argv -> [(kind, check, host, lenient)].
+    `lenient` marks bare host names, which may just be file/config names.
+    Loopback / unspecified IPs (bind addresses, local DB) are not targets."""
+    argv = _argv_list(args)
+    if not argv:
+        return []
+    exe = os.path.basename(argv[0]).lower()
+    if exe in QUERY_ONLY_BINARIES:
+        return []
+    found, prev = [], ""
+
+    def _add(k, chk, h, lenient):
+        if k in ("ip", "svc", "url") and _is_local_ip(h):
+            return
+        found.append((k, chk, h, lenient))
+
+    for a in argv[1:]:
+        if any(c.isspace() for c in a):
+            # Embedded script / option string (msfconsole -x, sh -c ...):
+            # only unambiguous network tokens (URL / IP / CIDR).
+            for piece in re.split(r"[\s;,'\"()\[\]{}]+", a):
+                for k, chk, h in _parse_target_token(piece):
+                    if k != "host":
+                        _add(k, chk, h, False)
+            prev = ""
+            continue
+        val, flag = a, prev
+        if a.startswith("-"):
+            if "=" not in a:
+                prev = a
+                continue
+            flag, val = a.split("=", 1)
+        elif "=" in a and "://" not in a.split("=", 1)[0]:
+            val = a.split("=", 1)[1]             # KEY=value (patator url=..., RHOSTS=...)
+        prev = ""
+        pieces = [val] if "://" in val else val.split(",")
+        for piece in pieces:
+            for k, chk, h in _parse_target_token(piece):
+                if k == "host":
+                    ext = h.rsplit(".", 1)[-1]
+                    if flag in _NON_TARGET_FLAGS or ext in _FILE_EXTS or os.path.exists(piece):
+                        continue
+                    _add(k, chk, h, True)
+                else:
+                    _add(k, chk, h, False)
+    return found
+
+
+def _decide_subprocess_target(ctx: "ScanContext", kind: str, check: str, host: str,
+                              lenient: bool) -> tuple:
+    """(allowed, category, reason) for one subprocess target."""
+    from tools._core.target_profile import _parse_url, within_time_window
+    rt = ctx.rt
+    if not within_time_window(rt.safety.get("time_window")):
+        return False, "blocked_outside_window", "outside the profile's allowed testing window"
+    if kind == "cidr":
+        net = ipaddress.ip_network(check, strict=False)
+        if any(net.version == n.version and net.subnet_of(n) for n in ctx.approved_nets):
+            for p in rt.scope.out:          # out-of-scope still wins inside an approved range
+                if p.kind == "cidr" and net.version == p.net.version and net.overlaps(p.net):
+                    return False, "blocked_out_of_scope", f"range overlaps out-of-scope {p.raw!r}"
+            return True, "in_scope", "inside the approved scan range"
+        ok, why = rt.scope.target_in_scope(check)
+        return ok, ("in_scope" if ok else "blocked_out_of_scope"), why
+    u = _parse_url(check)
+    if u is None:
+        return False, "blocked_out_of_scope", "unparseable target"
+    customer = rt.scope.is_customer_related(check)
+    # Out-of-scope patterns always win, even over the approved primary target.
+    resolve = customer or not lenient
+    for p in rt.scope.out:
+        if p.matches(u, resolve=resolve, any_ip=True):
+            return False, "blocked_out_of_scope", f"matches out-of-scope pattern {p.raw!r}"
+    h = host.strip("[]").lower()
+    if h in ctx.approved_hosts:
+        return True, "in_scope", "approved scan target"
+    ip = _ip_literal(h)
+    if ip is not None:
+        if any(ip.version == n.version and ip in n for n in ctx.approved_nets):
+            return True, "in_scope", "inside the approved scan range"
+        if str(ip) in ctx.approved_ips():
+            return True, "in_scope", "address of the approved scan target"
+    ok, cat, why = classify(check, ctx)
+    if ok:
+        return True, cat, why
+    if lenient and not customer and "out-of-scope pattern" not in why:
+        return True, "ignored", "bare name unrelated to the customer (not treated as a target)"
+    return False, cat, why
+
+
+def _check_subprocess_targets(ctx, targets: list, tool: str) -> tuple:
+    """targets: [(kind, check, host, lenient)] -> (ok, category, reason, target).
+    Records the outcome on ctx."""
+    checked = 0
+    for kind, check, host, lenient in targets:
+        ok, cat, why = _decide_subprocess_target(ctx, kind, check, host, lenient)
+        if not ok:
+            ctx.record(cat, f"subprocess:{tool} {check}", why)
+            ctx.bump("subprocess_blocked")
+            log.info("scope: subprocess %s target %s blocked (%s: %s) profile=%s",
+                     tool, check[:200], cat, why, ctx.profile_id)
+            return False, cat, why, check
+        if cat != "ignored":
+            checked += 1
+    if checked:
+        ctx.bump("subprocess_in_scope")
+    return True, "", "", ""
+
+
+def _explicit_targets(targets) -> list:
+    if targets is None or isinstance(targets, (str, bytes)):
+        targets = [targets] if targets else []
+    out = []
+    for t in targets:
+        t = (os.fsdecode(t) if isinstance(t, bytes) else str(t or "")).strip()
+        if not t:
+            continue
+        parsed = [] if any(c.isspace() for c in t) else _parse_target_token(t)
+        if not parsed:
+            pieces = [x for x in re.split(r"[\s,]+", t) if x]
+            if len(pieces) > 1:                 # "10.0.0.1 10.0.0.2" / "a.com,b.com"
+                out.extend(_explicit_targets(pieces))
+                continue
+            # Anything else (single-label "dc01", "lab_dvwa" ...) is checked
+            # as a host and must be covered by the scope.
+            parsed = [("host", t, _host_of(t) or t.lower())]
+        out.extend((k, c, h, False) for k, c, h in parsed)
+    return out
+
+
+def subprocess_scope_block(targets, tool: str = "subprocess") -> Optional[str]:
+    """Check the host(s)/URL(s)/IP(s)/CIDR(s) a tool is ABOUT to hand to an
+    external binary against the active profile's scope. Returns None when
+    allowed (always in LAB mode), else a human-readable SKIPPED reason. Blocks
+    are recorded on the scan context. Call it right before launching."""
+    ctx = current()
+    if ctx is None:
+        return None
+    ok, cat, why, tgt = _check_subprocess_targets(ctx, _explicit_targets(targets), tool)
+    if ok:
+        return None
+    label = ("outside the profile's allowed testing window" if cat == "blocked_outside_window"
+             else "out of scope for this target profile")
+    return (f"{tool}: not launched - target {tgt[:200]} is {label} ({why}). "
+            f"Nothing was tested against it.")
+
+
+def subprocess_scope_skip(tool: str, targets, report_target: Optional[str] = None) -> Optional[dict]:
+    """Standard SKIPPED payload when a subprocess target is out of scope, else None."""
+    reason = subprocess_scope_block(targets, tool)
+    if reason is None:
+        return None
+    if isinstance(targets, (list, tuple)):
+        first = str(targets[0]) if targets else ""
+    else:
+        first = str(targets or "")
+    cat = "outside_window" if "testing window" in reason else "out_of_scope"
+    return skip_payload(tool, report_target or first, reason, cat)
+
+
+_KUBE_SERVER_RE = re.compile(r"^\s*server:\s*['\"]?([^\s'\"#]+)", re.M)
+
+
+def kubeconfig_servers(kubeconfig_text: str) -> list:
+    """API-server URLs named in a kubeconfig (kubectl / kube-bench take the
+    target from the KUBECONFIG file, so it never appears in argv)."""
+    return _KUBE_SERVER_RE.findall(kubeconfig_text or "")[:20]
+
+
+def guard_subprocess_argv(args) -> None:
+    """Backstop for every subprocess launched while a ScanContext is active.
+    Raises ScopeBlockedSubprocess before the process is created."""
+    ctx = current()
+    if ctx is None:
+        return
+    try:
+        targets = argv_targets(args)
+        argv0 = _argv_list(args)[:1]
+    except Exception as e:     # never break a launch on a parser bug
+        log.debug("subprocess argv parse failed: %s", e)
+        return
+    if not targets:
+        return
+    tool = os.path.basename(argv0[0]) if argv0 else "subprocess"
+    ok, cat, why, tgt = _check_subprocess_targets(ctx, targets, tool)
+    if not ok:
+        e = ScopeBlockedSubprocess(
+            f"VulnusLab {cat}: {tool} not launched - target {tgt[:200]} is out of scope "
+            f"for this target profile ({why})")
+        e.category = cat
+        raise e
 
 
 # ── HTTP gate (called from main.py middleware) ─────────────────────
@@ -676,6 +1067,8 @@ async def http_gate(request, path: str, payload):
     ctx = ScanContext(rt, user_id, path, auth_role=role,
                       auth_mode=payload.get("auth_mode") if payload.get("auth_mode") in
                       ("authenticated", "unauthenticated") else None)
+    if target:
+        ctx.approve(target)      # passed target_in_scope above
     new_body = None
     # Per-tool auth (re)injection: every scanner request carrying a profile_id
     # gets the CURRENT session for its role, so an expired session is re-logged
@@ -736,8 +1129,32 @@ async def annotate_response(response, ctx: ScanContext):
                         headers=hdrs, media_type="application/json")
     if isinstance(data, dict):
         data["scope_enforcement"] = summary
-        reached = summary["in_scope"]
-        if reached == 0 and not data.get("findings"):
+        reached = summary["in_scope"] + summary.get("subprocess_in_scope", 0)
+        sp_blocked = summary.get("subprocess_blocked", 0)
+        findings = data.get("findings") if isinstance(data.get("findings"), list) else []
+        actionable = [f for f in findings if not isinstance(f, dict) or str(
+            f.get("severity") or "").upper() not in ("POSITIVE", "INFO", "PASS", "NONE", "")]
+        if sp_blocked and not summary.get("subprocess_in_scope") and not actionable:
+            # SCOPE-GUARD-SUBPROC-V1: the tool's external scanner was refused
+            # (out-of-scope target) and nothing else produced a real finding.
+            # Drop "clean" claims and report SKIPPED, never a silent pass.
+            sample = next((x for x in summary.get("blocked_samples") or []
+                           if str(x.get("url", "")).startswith("subprocess:")), {})
+            kept = [f for f in findings if not (isinstance(f, dict) and str(
+                f.get("severity") or "").upper() in ("POSITIVE", "PASS"))]
+            data["findings"] = kept
+            if "total" in data:
+                data["total"] = len(kept)
+            cat = ("outside_window" if sample.get("category") == "blocked_outside_window"
+                   else "out_of_scope")
+            what = str(sample.get("url") or "subprocess: target")[len("subprocess:"):].strip()
+            data.update({"status": "SKIPPED", "_skipped": True, "skipped": True,
+                         "skip_category": cat, "vulnerable": False,
+                         "skipped_reason": (f"External scanner not launched: {what[:200]} is "
+                                            f"outside the target profile's scope/testing window "
+                                            f"({sample.get('reason') or cat}); nothing was "
+                                            f"tested against it.")})
+        elif reached == 0 and not data.get("findings"):
             cat = ("outside_window" if summary.get("blocked_outside_window") else
                    "rate_limited" if summary.get("blocked_rate_limit") and not summary.get("blocked_out_of_scope")
                    else "out_of_scope")

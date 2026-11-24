@@ -12,7 +12,7 @@ import asyncio
 import json
 import shutil
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.enum4linux_ng_audit_findings import ENUM4LINUX_NG_AUDIT_FINDING_RULES
 
@@ -32,6 +32,11 @@ async def gather(ctx: ScanContext):
         ctx.source("enum4linux-ng missing")
         return
 
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(target, "enum4linux_ng_audit")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     # Run enum4linux-ng with -A (all) + -oJ (JSON output) to a tempfile
     import tempfile
     import os

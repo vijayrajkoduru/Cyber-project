@@ -15,7 +15,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from tools._pack_common import (make_advisory_router, _adv_response,
                                    _advisory_by_design_response)
-from tools._shared import wrap_finding
+from tools._shared import wrap_finding, subprocess_scope_skip
 from tools.container_k8s._dockerfile_probes import (
     _probe_dockerfile_root_user,
     _probe_dockerfile_no_user,
@@ -1756,6 +1756,9 @@ def _probe_kube_hunter(target, req):
             remediation="Rebuild backend with Dockerfile (nuclei is a dep).",
             evidence_marker="nuclei not in PATH")], 0, "Nuclei not installed")
 
+    skip = subprocess_scope_skip("kube_hunter", host, target)   # SCOPE-GUARD-SUBPROC-V1
+    if skip:
+        return skip
     exit_code, stdout, stderr = _run_tool([
         "nuclei",
         "-target", host,

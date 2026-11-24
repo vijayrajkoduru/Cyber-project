@@ -23,7 +23,7 @@ import subprocess
 import tempfile
 from typing import Optional, Tuple
 
-from tools._shared import wrap_finding
+from tools._shared import wrap_finding, kubeconfig_scope_block
 
 
 def _ndr(slug, target, reason=""):
@@ -71,6 +71,8 @@ def _get_node_runtimes(kubeconfig_text) -> Tuple[int, list]:
     """Return (exit_code, [{node, runtime_name, runtime_version, kernel}, ...])."""
     if shutil.which("kubectl") is None:
         return 127, []
+    if kubeconfig_scope_block(kubeconfig_text, "kubectl"):   # SCOPE-GUARD-SUBPROC-V1
+        return 126, []
     fd, path = tempfile.mkstemp(prefix="vl-kc-", suffix=".yaml")
     try:
         os.write(fd, kubeconfig_text.encode("utf-8")); os.close(fd); os.chmod(path, 0o600)

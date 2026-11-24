@@ -2,7 +2,7 @@
 import asyncio, shutil
 import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._shared import ScanRequest, verify_scan_quota, recon_host, subprocess_scope_block
 from tools._vl_core import run_scanner
 from tools._vl_core.verify import vl_verify
 router = APIRouter()
@@ -43,6 +43,11 @@ def _parse(xml):
                     vulns.append({"port": pid, "id": scr.get("id",""), "output": " ".join(o.split())[:300]})
     return vulns, ports
 async def gather(ctx):
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(str(ctx.host), "nmap_nse_vuln_scripts")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     res, err = await _run(str(ctx.host))
     if err:
         ctx.state["skipped_reason"] = err; return

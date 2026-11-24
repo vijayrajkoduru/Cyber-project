@@ -24,7 +24,7 @@ import tempfile
 from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.netexec_smb_spray_findings import NETEXEC_SMB_SPRAY_FINDING_RULES
 
@@ -83,6 +83,11 @@ async def gather(ctx: ScanContext):
         ctx.source("no password")
         return
 
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(target, "netexec_smb_spray")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     user_file = None
     try:
         fd, user_file = tempfile.mkstemp(prefix="nxc_users_", suffix=".txt")

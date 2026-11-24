@@ -23,7 +23,7 @@ import os
 from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.certipy_find_findings import CERTIPY_FIND_FINDING_RULES
 
@@ -116,6 +116,11 @@ async def gather(ctx: ScanContext):
     username = opts.get("username") or ""
     password = opts.get("password") or ""
 
+    # SCOPE-GUARD-SUBPROC-V1: scope-check the exact target before launching
+    _scope_why = subprocess_scope_block(target, "certipy_find")
+    if _scope_why:
+        ctx.state["skipped_reason"] = _scope_why
+        return
     if username and password and domain:
         result = await _certipy_authenticated(ctx, target, domain, username, password)
         ctx.state["certipy_auth_mode"] = "authenticated"

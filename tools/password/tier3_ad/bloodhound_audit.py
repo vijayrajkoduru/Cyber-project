@@ -78,7 +78,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import ScanRequest, verify_scan_quota, subprocess_scope_block
 from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.bloodhound_audit_findings import (
@@ -306,6 +306,13 @@ class BloodhoundAudit(MethodologyScanner):
         if method not in ("Default", "DCOnly", "All"):
             method = "DCOnly"
 
+        # SCOPE-GUARD-SUBPROC-V1: dc_ip comes from options, not the gated
+        # primary target - check it before the collector (in-process or
+        # bloodhound-python subprocess) talks to it.
+        _scope_why = subprocess_scope_block(dc_ip or ctx.host, "bloodhound_audit")
+        if _scope_why:
+            ctx.state["deep_skipped"] = _scope_why
+            return []
         tmpdir = tempfile.mkdtemp(prefix="vl_bh_")
         ctx.state["collection_tmpdir"] = tmpdir
         ctx.state["collection_method"] = method

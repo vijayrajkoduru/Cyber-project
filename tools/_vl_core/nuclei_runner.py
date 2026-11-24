@@ -88,6 +88,11 @@ def run_nuclei(req, tags: list[str], *,
             pass
 
     target = web_url(req.target)
+    # SCOPE-GUARD-SUBPROC-V1: never launch nuclei at an out-of-scope target.
+    from tools._shared import subprocess_scope_block
+    blocked = subprocess_scope_block(target, "nuclei")
+    if blocked:
+        return {"findings": [], "tested": 0, "skipped": blocked, "raw": []}
     severities = {
         "critical": "critical",
         "high": "high,critical",
