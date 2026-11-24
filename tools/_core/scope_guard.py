@@ -1018,8 +1018,9 @@ def browser_url_allowed(url: str, ctx: Optional["ScanContext"] = None) -> bool:
 # Every TCP connect made while a ScanContext is active is now checked: the IP
 # is mapped back to the host name(s) that resolved to it in this process and
 # that name (or the bare IP) must pass the same rules as subprocess targets.
-# Loopback and the platform's own services are always allowed; UDP is not
-# gated (resolver traffic). No ScanContext (LAB mode) -> no-op.
+# Loopback and the platform's own services are always allowed. UDP is gated
+# too (connect + sendto: SNMP/NTP/SIP/IPMI/NetBIOS probes), except DNS/mDNS
+# resolver traffic (ports 53/5353). No ScanContext (LAB mode) -> no-op.
 import collections as _collections
 import socket as _socket
 
@@ -1137,14 +1138,19 @@ def _install_socket_guard() -> None:
         _o_connect = _socket.socket.connect
         _o_connect_ex = _socket.socket.connect_ex
 
+        _UDP_EXEMPT_PORTS = {53, 5353}
+
         def _gate(sock, address):
             if _SCAN_CTX.get() is None:
                 return
             if sock.family not in (_socket.AF_INET, _socket.AF_INET6):
                 return
-            if sock.type != _socket.SOCK_STREAM:
+            st = sock.type
+            if st not in (_socket.SOCK_STREAM, _socket.SOCK_DGRAM):
                 return
             if isinstance(address, tuple) and len(address) >= 2:
+                if st == _socket.SOCK_DGRAM and address[1] in _UDP_EXEMPT_PORTS:
+                    return
                 check_socket_target(address[0], address[1])
 
         def _vl_connect(self, address):
@@ -1160,6 +1166,15 @@ def _install_socket_guard() -> None:
             return _o_connect_ex(self, address)
         _socket.socket.connect = _vl_connect
         _socket.socket.connect_ex = _vl_connect_ex
+
+        # UDP datagrams sent without connect(): sendto(data[, flags], addr).
+        _o_sendto = _socket.socket.sendto
+
+        def _vl_sendto(self, data, *args):
+            if args and _SCAN_CTX.get() is not None:
+                _gate(self, args[-1])
+            return _o_sendto(self, data, *args)
+        _socket.socket.sendto = _vl_sendto
 
         # uvloop's create_connection never calls socket.connect, so gate the
         # stream API the in-process probes use as well.

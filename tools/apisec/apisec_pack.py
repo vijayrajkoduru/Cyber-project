@@ -64,12 +64,53 @@ _SPEC_PROBE_CAP = 60            # operations actually requested per probe
 _SPEC_TIMEOUT = 4.0
 
 
+_SPEC_URL_MAX = 5 * 1024 * 1024
+
+
+def _fetch_spec_url(url: str, target: str, req) -> tuple:
+    """APISEC-SPEC-URL-V1: download the spec named in api_spec_url.
+    Returns (text, error). Same-host specs are fetched with the scan's
+    credentials; any other host must be a public address (anti-SSRF) and is
+    fetched without credentials. Outbound traffic stays scope-guarded."""
+    import requests
+    from urllib.parse import urlparse
+    u = (url or "").strip()
+    if not u.lower().startswith(("http://", "https://")):
+        return None, "api_spec_url must be an http(s) URL"
+    same_host = (urlparse(u).hostname or "").lower() == _host(target).split(":")[0]
+    if not same_host:
+        from tools._shared import is_safe_external_url
+        ok, why = is_safe_external_url(u)
+        if not ok:
+            return None, f"api_spec_url rejected: {why}"
+    h = {"User-Agent": "VulnusLab/2.0",
+         "Accept": "application/json, application/yaml, text/yaml, */*"}
+    if same_host:
+        h.update(_auth_headers(req))
+    try:
+        r = requests.get(u, headers=h, timeout=15, verify=False, stream=True,
+                         allow_redirects=same_host)
+        if r.status_code != 200:
+            return None, f"api_spec_url returned HTTP {r.status_code}"
+        buf = b""
+        for chunk in r.iter_content(65536):
+            buf += chunk
+            if len(buf) > _SPEC_URL_MAX:
+                return None, "api_spec_url document larger than 5 MB"
+        return buf.decode("utf-8", "ignore"), None
+    except Exception as e:
+        return None, f"api_spec_url fetch failed: {type(e).__name__}"
+
+
 def _profile_spec(req, target: str) -> dict:
-    """Load + parse the stored spec for req.profile_id. Never raises.
+    """Load + parse the OpenAPI spec for this scan. Never raises.
+    Source: the spec stored on req.profile_id's target profile, else the
+    api_spec_url field (APISEC-SPEC-URL-V1, also in LAB mode).
     Returns {"status": loaded|no_profile|no_spec|invalid|unavailable, ...}."""
     import hashlib
     pid = getattr(req, "profile_id", None)
-    if not pid:
+    spec_url = (getattr(req, "api_spec_url", None) or "").strip()
+    if not pid and not spec_url:
         return {"status": "no_profile"}
     try:
         from tools._core import scope_guard
@@ -77,40 +118,54 @@ def _profile_spec(req, target: str) -> dict:
     except Exception as e:
         return {"status": "unavailable", "error": f"profile modules unavailable: {type(e).__name__}"}
     ctx = scope_guard.current()
-    if ctx is None or ctx.rt.id != str(pid)[:64]:
-        return {"status": "unavailable", "error": "profile scan context not active"}
-    try:
-        text = get_openapi_spec(ctx.rt.id, ctx.rt.owner_id)
-    except Exception as e:
-        return {"status": "unavailable", "error": f"could not read stored spec: {type(e).__name__}"}
+    text, source, err = None, "target_profile", None
+    if pid:
+        if ctx is None or ctx.rt.id != str(pid)[:64]:
+            err = "profile scan context not active"
+        else:
+            try:
+                text = get_openapi_spec(ctx.rt.id, ctx.rt.owner_id)
+            except Exception as e:
+                err = f"could not read stored spec: {type(e).__name__}"
+    if not text and spec_url:
+        source = "api_spec_url"
+        text, err = _fetch_spec_url(spec_url, target, req)
+        if err:
+            return {"status": "unavailable", "error": err, "source": source}
     if not text:
-        return {"status": "no_spec"}
+        return {"status": "unavailable", "error": err} if err else {"status": "no_spec"}
     from tools.apisec import openapi_spec as oas
-    key = (ctx.rt.id, hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest(), _base_url(target))
+    key = (ctx.rt.id if ctx else "lab", hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest(),
+           _base_url(target))
     hit = _SPEC_CACHE.get(key)
     if hit is not None:
         return hit
     doc, kind, err = oas.parse_spec(text)
     if err:
-        res = {"status": "invalid", "error": err}
+        res = {"status": "invalid", "error": err, "source": source}
     else:
+        target_host = _host(target).split(":")[0]
+
         def _allowed(url):
-            ok, _why = ctx.rt.scope.decide(url)
-            return ok
+            if ctx is not None:
+                ok, _why = ctx.rt.scope.decide(url)
+                return ok
+            from urllib.parse import urlparse
+            return (urlparse(url).hostname or "").lower() == target_host
         base, note = oas.resolve_base(doc, kind, _base_url(target), server_allowed=_allowed)
         ops = oas.build_operations(doc, kind)
         in_scope, out_scope = [], 0
         for op in ops:
             url = base + op["filled_path"]
             try:
-                ok, _why = ctx.rt.scope.decide(url)
+                ok = _allowed(url)
             except Exception:
                 ok = False
             if ok:
                 in_scope.append(dict(op, url=url))
             else:
                 out_scope += 1
-        res = {"status": "loaded", **oas.summarize(doc, kind), "base_url": base,
+        res = {"status": "loaded", "source": source, **oas.summarize(doc, kind), "base_url": base,
                "base_note": note, "operations": in_scope,
                "total_operations": len(ops), "in_scope": len(in_scope),
                "out_of_scope": out_scope}
@@ -122,7 +177,7 @@ def _profile_spec(req, target: str) -> dict:
 
 def _spec_coverage(spec: dict, tested: int = 0) -> dict:
     """Compact, report-friendly coverage block (no operation bodies)."""
-    out = {"source": "target_profile", "status": spec.get("status")}
+    out = {"source": spec.get("source") or "target_profile", "status": spec.get("status")}
     if spec.get("status") == "loaded":
         out.update({k: spec.get(k) for k in ("spec_kind", "spec_version", "title",
                                              "base_url", "base_note", "total_operations",
@@ -144,11 +199,30 @@ def _spec_summary_suffix(spec: dict, tested: int) -> str:
     return ""
 
 
-def _spec_send(op: dict, timeout: float = _SPEC_TIMEOUT):
-    """Send one spec operation UNAUTHENTICATED. Returns (status, ctype, body)."""
+def _auth_headers(req) -> dict:
+    """Credential headers of the scan (cookie / bearer / API key / profile
+    role), without the generic browser headers."""
+    try:
+        from tools._shared import make_req_headers, _BROWSER_HEADERS
+        h = make_req_headers(req)
+        return {k: v for k, v in h.items() if _BROWSER_HEADERS.get(k) != v}
+    except Exception:
+        out = {}
+        if getattr(req, "auth_cookie", None):
+            out["Cookie"] = req.auth_cookie
+        if getattr(req, "auth_bearer", None):
+            out["Authorization"] = f"Bearer {req.auth_bearer}"
+        return out
+
+
+def _spec_send(op: dict, timeout: float = _SPEC_TIMEOUT, auth: dict | None = None):
+    """Send one spec operation; unauthenticated unless `auth` headers are
+    given. Returns (status, ctype, body)."""
     import requests
     h = {"User-Agent": "VulnusLab/2.0", "Accept": "application/json, */*"}
     h.update(op.get("headers") or {})
+    if auth:
+        h.update(auth)
     kw = {"params": op.get("query") or None, "headers": h, "timeout": timeout,
           "allow_redirects": False, "verify": False}
     body, ct = op.get("body"), (op.get("content_type") or "").lower()
@@ -228,7 +302,61 @@ def _probe_spec_operations(target, req, spec: dict) -> tuple:
                          f"out_of_scope={spec.get('out_of_scope', 0)}; "
                          f"state-changing skipped={skipped_unsafe}; "
                          f"over cap={max(0, len(runnable) - len(batch))}; errors={errors}")))
-    raw = {"spec_unauthenticated": unauth, "spec_missing": missing[:50],
+    # APISEC-SPEC-AUTH-V1: authenticated pass. With scan credentials, re-send
+    # the operations so the spec is actually covered behind the login, and
+    # report server errors / leaked stack traces on documented operations.
+    auth = _auth_headers(req)
+    authed = {"enabled": bool(auth)}
+    if auth:
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            a_results = list(ex.map(lambda o: _spec_send(o, auth=auth), batch))
+        a_ok, a_denied, a_5xx, a_leak = [], [], [], []
+        _leak_re = ("Traceback (most recent call last)", "at java.", "at org.",
+                    "Exception in thread", "SQLSTATE", "ORA-", "System.NullReferenceException",
+                    "stack trace", "Stack trace:", "PG::", "SQLException")
+        for op, (code, ct, body) in zip(batch, a_results):
+            label = f"{op['method']} {op['path']}"
+            if code == 0:
+                continue
+            if code in (401, 403):
+                a_denied.append(label)
+            elif 200 <= code < 400:
+                a_ok.append(label)
+            if code >= 500:
+                a_5xx.append(f"{label} -> {code}")
+            txt = (body or b"")[:8192].decode("utf-8", "ignore")
+            if any(m in txt for m in _leak_re):
+                a_leak.append(label)
+        secured = [o for o in batch if o["requires_auth"]]
+        if a_leak:
+            findings.append(wrap_finding(
+                f"{len(a_leak)} documented endpoint(s) leak stack traces / internal errors",
+                "MEDIUM", cvss="5.3", cwe="CWE-209",
+                remediation="Return generic error bodies; log details server-side only (API8).",
+                evidence_marker="; ".join(a_leak[:15])))
+        if a_5xx:
+            findings.append(wrap_finding(
+                f"{len(a_5xx)} documented endpoint(s) return 5xx with valid example input",
+                "LOW", cvss="3.7", cwe="CWE-755",
+                remediation="Validate input and handle errors on every documented operation.",
+                evidence_marker="; ".join(a_5xx[:15])))
+        if secured and not a_ok and len(a_denied) >= max(1, len(secured) // 2):
+            findings.append(wrap_finding(
+                "Authenticated spec pass not achieved — credentials were rejected",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Refresh the session / token on the target profile and re-scan; "
+                            "endpoints behind the login were NOT tested.",
+                evidence_marker=f"{len(a_denied)} operation(s) answered 401/403 with credentials"))
+        else:
+            findings.append(wrap_finding(
+                f"Authenticated spec pass: {len(a_ok)} of {len(batch)} operations reachable with credentials",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Review authenticated responses for excessive data exposure (API3).",
+                evidence_marker=f"denied={len(a_denied)}; 5xx={len(a_5xx)}; error-leaks={len(a_leak)}"))
+        authed.update({"reachable": a_ok[:100], "denied": a_denied[:50],
+                       "server_errors": a_5xx[:50], "error_leaks": a_leak[:50]})
+    raw = {"spec_authenticated": authed,
+           "spec_unauthenticated": unauth, "spec_missing": missing[:50],
            "spec_reachable": reachable[:100], "spec_errors": errors,
            "spec_state_changing_skipped": skipped_unsafe,
            "spec_destructive_allowed": destructive_ok,
@@ -269,13 +397,22 @@ def _probe_openapi_swagger(target, req):
     spec = _profile_spec(req, target)
     if spec.get("status") == "loaded":
         findings.append(wrap_finding(
-            f"Stored OpenAPI spec loaded from target profile — {spec['in_scope']} endpoints from spec",
+            ("OpenAPI spec loaded from api_spec_url" if spec.get("source") == "api_spec_url"
+             else "Stored OpenAPI spec loaded from target profile")
+            + f" — {spec['in_scope']} endpoints from spec",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Spec operations are exercised by the API endpoint tests.",
             evidence_marker=_spec_coverage(spec)["summary"] + f"; base={spec['base_url']}"))
+    elif spec.get("status") == "unavailable" and spec.get("source") == "api_spec_url":
+        findings.append(wrap_finding(
+            "OpenAPI spec URL could not be loaded — spec endpoints NOT tested",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Check the OpenAPI / Swagger URL is reachable from the scanner, "
+                        "or upload the spec to the target profile.",
+            evidence_marker=str(spec.get("error", ""))[:300]))
     elif spec.get("status") == "invalid":
         findings.append(wrap_finding(
-            "Stored OpenAPI spec on the target profile could not be parsed",
+            "OpenAPI spec could not be parsed",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Re-upload a valid OpenAPI 3.x or Swagger 2.0 document (JSON or YAML).",
             evidence_marker=str(spec.get("error", ""))[:300]))

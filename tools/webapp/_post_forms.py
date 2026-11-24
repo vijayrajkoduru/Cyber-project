@@ -255,6 +255,7 @@ def refresh_hidden(form: dict, req, data: dict) -> dict:
     r = safe_get(form["page"], req=req, allow_redirects=True, timeout=10, retries=0)
     if r is None or not r.text:
         return data
+    _remember_cookies(form, r)
     want_path = urlparse(form["action"]).path.rstrip("/")
     names = {f["name"] for f in form["fields"]}
     best = None
@@ -285,6 +286,35 @@ def refresh_hidden(form: dict, req, data: dict) -> dict:
     return out
 
 
+def _remember_cookies(form: dict, r) -> None:
+    """CSRF-COOKIE-V1: keep cookies the form page set (Django csrftoken,
+    Rails/Laravel session) so the POST carries the cookie its token is bound
+    to. Without this an anonymous scan's every submit was a 403 (Django
+    "CSRF cookie not set") and injection scanners reported nothing."""
+    try:
+        jar = form.setdefault("_page_cookies", {})
+        for resp in list(getattr(r, "history", None) or []) + [r]:
+            for c in getattr(resp, "cookies", None) or []:
+                if c.name and c.value is not None:
+                    jar[c.name] = c.value
+    except Exception:
+        pass
+
+
+def _post_headers(form: dict, req) -> dict:
+    """Referer (Django checks it on HTTPS) + page cookies the scan's own
+    session does not already carry (the captured auth cookie stays authoritative)."""
+    h = {"Referer": form.get("page") or form["action"]}
+    jar = form.get("_page_cookies") or {}
+    if jar:
+        auth = getattr(req, "auth_cookie", None) or ""
+        have = {p.split("=", 1)[0].strip() for p in auth.split(";") if "=" in p}
+        extra = [f"{k}={v}" for k, v in jar.items() if k not in have]
+        if extra:
+            h["Cookie"] = "; ".join(extra)
+    return h
+
+
 def build_data(form: dict, req, field: str = None, value: str = None) -> dict:
     """Defaults + fresh CSRF tokens, with `field` set to `value` (if given)."""
     data = refresh_hidden(form, req, default_data(form))
@@ -304,4 +334,4 @@ def submit(form: dict, req, field: str = None, value: str = None, *,
 
 def post_data(form: dict, data: dict, req, *, timeout: int = 12, retries: int = 0):
     return safe_post(form["action"], data=data, req=req, allow_redirects=True,
-                     timeout=timeout, retries=retries)
+                     timeout=timeout, retries=retries, headers=_post_headers(form, req))
