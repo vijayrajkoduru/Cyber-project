@@ -119,7 +119,20 @@ def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
     # discovered/seeded upload form using its real field name, and confirm the
     # upload was ACCEPTED (success text or the stored path echoed) rather than
     # treating any 200 as a hit.
-    for form in [f for f in (spa.get("forms") or []) if f.get("file_field")][:6]:
+    _uf, _seen_uf = [], set()
+    for f in (spa.get("forms") or []):
+        if not f.get("file_field"):
+            continue
+        try:   # CANON-HOST-V1: one test per (path, field), whatever host spelling
+            from urllib.parse import urlparse as _up
+            _k = ((_up(f.get("action") or "").path.rstrip("/") or "/"), f.get("file_field"))
+        except Exception:
+            _k = (f.get("action"), f.get("file_field"))
+        if _k in _seen_uf:
+            continue
+        _seen_uf.add(_k)
+        _uf.append(f)
+    for form in _uf[:6]:
         if _bailed: break
         action = form.get("action")
         ffield = form.get("file_field")
@@ -136,9 +149,15 @@ def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
                 h = make_req_headers(req)
                 h.pop("Content-Type", None)
                 h = _clean_underscore_host(action, h)  # underscore Docker hosts 400 otherwise
-                r = requests.post(action, files={ffield: (filename, content, ctype)},
-                                  data=extra, headers=h, timeout=10, verify=False,
-                                  allow_redirects=False)
+                r = None
+                for _to in (12, 25):   # UPLOAD-RETRY-V1: one retry when the
+                    try:               # target is busy (shared PHP session lock)
+                        r = requests.post(action, files={ffield: (filename, content, ctype)},
+                                          data=extra, headers=h, timeout=_to, verify=False,
+                                          allow_redirects=False)
+                        break
+                    except requests.exceptions.Timeout:
+                        continue
             except Exception:
                 continue
             if r is None:

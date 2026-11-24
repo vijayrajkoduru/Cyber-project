@@ -10,10 +10,11 @@ fingerprinted first; any SSRF probe that returns the IDENTICAL response
 is dropped (the site is ignoring the param — typical SPA behaviour).
 """
 import hashlib
+import html
 import re
 import secrets
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import quote, urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -121,14 +122,17 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
         new_params[key] = f"https://benign-{canary_token}.example/"
         canary_url = urlunparse(parsed._replace(query=urlencode(new_params)))
         cr = safe_get(canary_url, req=req, allow_redirects=False, timeout=8, retries=0)
-        return (key, _resp_fingerprint(cr))
+        btxt = (cr.text or "")[:8000] if (cr is not None and cr.status_code == 200) else None
+        return (key, _resp_fingerprint(cr), btxt)
 
     baselines = {}
+    baseline_text = {}   # SSRF-BASELINE-DIFF-V1
     try:
         with ThreadPoolExecutor(max_workers=min(15, len(candidates_list) or 1)) as pool:
-            for key, fp in pool.map(_baseline, candidates_list,
-                                     timeout=_WALLCLOCK_BUDGET):
+            for key, fp, btxt in pool.map(_baseline, candidates_list,
+                                          timeout=_WALLCLOCK_BUDGET):
                 baselines[key] = fp
+                baseline_text[key] = btxt
     except TimeoutError:
         _bailed = True
 
@@ -157,9 +161,23 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
         baseline_fp = baselines.get(key)
         if baseline_fp is not None and probe_fp == baseline_fp:
             return ("spa", key, entry, None)
+        # SSRF-BASELINE-DIFF-V1 — the marker must come from the fetched
+        # resource: present in the probe response (with our own payload echo
+        # removed) AND absent from the benign-canary baseline of the same
+        # param. Pages that change per request (CSRF tokens, echoed values)
+        # defeat the fingerprint check above, and generic words like
+        # "project/" in normal page text then faked a GCP-metadata CRITICAL.
+        body = (r.text or "")[:8000]
+        for echo in {ssrf_url, quote(ssrf_url, safe=""), quote(ssrf_url, safe="/:"),
+                     html.escape(ssrf_url)}:
+            body = body.replace(echo, "")
+        btxt = baseline_text.get(key)
         try:
-            if re.search(marker, (r.text or "")[:8000], re.IGNORECASE):
-                return ("hit", key, entry, marker)
+            if not re.search(marker, body, re.IGNORECASE):
+                return ("miss", key, entry, None)
+            if btxt is None or re.search(marker, btxt, re.IGNORECASE):
+                return ("spa", key, entry, None)   # no usable baseline / page text
+            return ("hit", key, entry, marker)
         except re.error:
             pass
         return ("miss", key, entry, None)

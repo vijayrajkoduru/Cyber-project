@@ -150,6 +150,19 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     import time as _time
     _wallclock_start = _time.time()
     _WALLCLOCK_BUDGET = 60.0
+    # LFI-DEADLINE-V1 — hard deadline well under the 120s VL-TURBO cap, which
+    # discards EVERYTHING (confirmed findings included) when it fires. Every
+    # request's timeout is clamped to the time left and never retried: on a
+    # lab where all scanners share one PHP session, requests queue behind
+    # other scanners' SLEEP() probes and a single retried 12s request could
+    # eat ~57s.
+    _DEADLINE = _wallclock_start + 95.0
+
+    def _left():
+        return _DEADLINE - _time.time()
+
+    def _to():
+        return max(2, min(10, int(_left()) - 1))
     _bailed = False
     # LFI-DEDUPE-V1 — the crawler records fi/?page=include.php, ?page=file1.php,
     # ?page=file2.php ... as separate URLs, so the same sink was confirmed and
@@ -175,17 +188,19 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
             _bl_params = {k: v[0] for k, v in params.items()}
             _bl_params[key] = "1"
             _bl_url = urlunparse(tu_parsed._replace(query=urlencode(_bl_params)))
-            _bl = safe_get(_bl_url, req=req, allow_redirects=True, timeout=12)
+            if _left() < 4:
+                _bailed = True; break
+            _bl = safe_get(_bl_url, req=req, allow_redirects=True, timeout=_to(), retries=0)
             baseline_body = ((_bl.text or "")[:50000]
                              if (_bl is not None and _bl.status_code == 200) else None)
             for entry in payload_set:
-                if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET or _left() < 4:
                     _bailed = True; break
                 tests += 1
                 new_params = {k: v[0] for k, v in params.items()}
                 new_params[key] = entry["payload"]
                 test_url = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
-                r = safe_get(test_url, req=req, allow_redirects=True, timeout=12)
+                r = safe_get(test_url, req=req, allow_redirects=True, timeout=_to(), retries=0)
                 if r is None or r.status_code != 200: continue
                 body = _strip_echo((r.text or "")[:50000], entry["payload"])
                 if not _check_marker(body, entry["matcher"], entry["category"]):
@@ -231,17 +246,19 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
             if _post_bailed: break
             if ("POST " + urlparse(action).path.rstrip("/"), key) in _lfi_hits:
                 continue
-            _bl = pf.submit(form, req, key, "1", timeout=12)
+            if _left() < 6:
+                _post_bailed = True; break
+            _bl = pf.submit(form, req, key, "1", timeout=_to())
             baseline_body = ((_bl.text or "")[:50000]
                              if (_bl is not None and _bl.status_code == 200) else None)
             if baseline_body is None:
                 continue   # conservative: never confirm without a baseline
             for entry in payload_set:
                 if (_time.time() - _post_start > _POST_BUDGET or
-                        _time.time() - _wallclock_start > 90):  # stay under vl_turbo cap
+                        _left() < 6):  # stay under vl_turbo cap
                     _post_bailed = True; break
                 tests += 1
-                r = pf.submit(form, req, key, entry["payload"], timeout=12)
+                r = pf.submit(form, req, key, entry["payload"], timeout=_to())
                 if r is None or r.status_code != 200: continue
                 body = _strip_echo((r.text or "")[:50000], entry["payload"])
                 if not _check_marker(body, entry["matcher"], entry["category"]):
@@ -253,7 +270,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 # from a previous probe can satisfy this matcher. Re-take the
                 # benign baseline NOW — if the marker is there too, it is
                 # stored echo, not a file read.
-                _bl2 = pf.submit(form, req, key, "1", timeout=12)
+                _bl2 = pf.submit(form, req, key, "1", timeout=_to())
                 if _bl2 is None or _bl2.status_code != 200 or _check_marker(
                         (_bl2.text or "")[:50000], entry["matcher"], entry["category"]):
                     continue

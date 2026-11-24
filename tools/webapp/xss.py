@@ -171,10 +171,12 @@ def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 if res is not None:
                     hits.append(res)
 
-    # Preserve original semantics: first confirmed XSS per URL only.
+    # XSS-DEDUPE-V1: one finding per (path, param). Keying by the full URL
+    # reported the same sink twice when the crawler and the seeds spelled the
+    # query differently (?name=1 vs ?name=x&...).
     hits_by_url = {}
     for h in hits:
-        hits_by_url.setdefault(h[0], h)
+        hits_by_url.setdefault((urlparse(h[0]).path.rstrip("/") or "/", h[1]), h)
 
     def _confirm_job(h):
         u, key, params, ctx, canary = h
@@ -195,7 +197,7 @@ def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     f"Reflected XSS — parameter {key!r} reflects unescaped in {ctx} context",
                     sev, cvss=cvss, cwe="CWE-79", owasp="A03:2021",
                     remediation="Context-aware output encoding (HTML/JS/URL). Use auto-escaping templates.",
-                    evidence_marker=(f"canary={canary} reflected in {ctx} context; "
+                    evidence_marker=(f"GET {u} param={key}: canary={canary} reflected in {ctx} context; "
                                      f"payload {payload_used!r} rendered un-encoded")))
                 confirmed.append({"url": u, "param": key, "context": ctx,
                                    "payload": payload_used})

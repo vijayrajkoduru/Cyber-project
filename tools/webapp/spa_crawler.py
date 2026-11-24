@@ -171,6 +171,7 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
     # default vhost serves the IP fine. Real customer domains have no
     # underscore, so this is a no-op for them.
     _pp = urlparse(target_url)
+    _orig_netloc = _pp.netloc          # CANON-HOST-V1: map IP back on save
     if _pp.hostname and "_" in _pp.hostname:
         try:
             import socket as _socket
@@ -508,6 +509,27 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
             discovered_urls.add(target_url.rstrip("/") + _sp)
     except Exception:
         pass
+
+    # CANON-HOST-V1 — the crawl navigated by IP (UNDERSCORE-BROWSER-V1), but
+    # seeds and other scanners address the lab by its name, so the same page
+    # was tested twice (http://172.18.0.12/x and http://lab_dvwa/x) and every
+    # finding was reported twice. Store everything under the original host;
+    # the HTTP layer already fixes the underscore Host header for scanners.
+    _ip_netloc = urlparse(target_url).netloc
+    if _ip_netloc != _orig_netloc:
+        def _canon(v):
+            if isinstance(v, str):
+                return v.replace(f"//{_ip_netloc}", f"//{_orig_netloc}")
+            if isinstance(v, list):
+                return [_canon(x) for x in v]
+            if isinstance(v, set):
+                return {_canon(x) for x in v}
+            if isinstance(v, dict):
+                return {_canon(k): _canon(x) for k, x in v.items()}
+            return v
+        discovered_urls = _canon(discovered_urls)
+        api_summary = _canon(api_summary)
+        discovered_forms = _canon(discovered_forms)
 
     # Persist for downstream scanners (sqli, xss, lfi, idor, ...)
     try:
