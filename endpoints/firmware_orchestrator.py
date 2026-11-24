@@ -11,15 +11,59 @@ ScanRequest.target = path to firmware blob on disk (customer uploads to /tmp).
 More scanners (unblob, FACT, EMBA, firmwalker, CHIPSEC, UEFITool, BMC) will be
 added per playbook section in subsequent commits.
 """
+import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_parallel, run_module_streaming
 
 router = APIRouter()
+
+
+# ─── FIRMWARE-UPLOAD-V1: customer uploads the firmware blob ──────
+# Firmware scanners take req.target = a file path, and the artifact guard in
+# main.py only accepts paths inside the upload roots (tools._shared.
+# artifact_roots). Before this there was no way to get a firmware image into
+# those roots, so every firmware scan was refused. Firmware formats vary too
+# much for a magic-byte allowlist (raw flash dumps, uImage, TRX, squashfs,
+# vendor containers), so we only enforce size + a non-empty file; the
+# scanners read it with binwalk/radare2 in a non-root container.
+FW_UPLOAD_DIR = writable_base("VL_UPLOAD_DIR", "/uploads") / "firmware"
+try:
+    FW_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
+FW_MAX_UPLOAD_BYTES = 256 * 1024 * 1024  # 256 MB
+
+
+@router.post("/api/firmware/upload")
+async def firmware_upload(file: UploadFile = File(...),
+                          _=Depends(verify_scan_quota)):
+    """Receive a firmware image, store it under the firmware upload root and
+    return its server path for use as the scan target."""
+    FW_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    scan_id = uuid.uuid4().hex[:12]
+    safe_name = "".join(c for c in (file.filename or "firmware.bin")
+                        if c.isalnum() or c in "._-")[:80].lstrip(".") or "firmware.bin"
+    out_path = FW_UPLOAD_DIR / f"{scan_id}_{safe_name}"
+    total = 0
+    with out_path.open("wb") as f:
+        while chunk := await file.read(1024 * 1024):
+            total += len(chunk)
+            if total > FW_MAX_UPLOAD_BYTES:
+                f.close()
+                out_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413,
+                                    detail=f"File exceeds {FW_MAX_UPLOAD_BYTES // (1024*1024)} MB")
+            f.write(chunk)
+    if total == 0:
+        out_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Empty file")
+    return {"scan_id": scan_id, "path": str(out_path),
+            "filename": safe_name, "size": total}
 
 
 FIRMWARE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {

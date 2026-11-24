@@ -93,9 +93,9 @@ _ARTIFACT_STRICT_PREFIXES = ("/api/bof/", "/api/mobile_static/", "/api/firmware/
 _ARTIFACT_PATH_CAPABLE_PREFIXES = (
     "/api/mobile_", "/api/supply_chain/",
 )
-_ARTIFACT_EXEMPT = {"/api/mobile_static/upload"}
+_ARTIFACT_EXEMPT = {"/api/mobile_static/upload", "/api/firmware/upload"}
 _ARTIFACT_MSG = ("Invalid target: local-artifact scanners only accept files "
-                 "uploaded via /api/mobile_static/upload.")
+                 "uploaded via /api/mobile_static/upload or /api/firmware/upload.")
 
 
 def _artifact_guard_error(path, payload):

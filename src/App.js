@@ -58,6 +58,22 @@ function _vlIsOwnApi(url) {
       if (a !== null && /^bearer\s*(null|undefined|__vl_cookie_session__)?\s*$/i.test(a.trim())) h.delete("Authorization");
       h.set("X-VL-Session", "cookie");
       const method = String(o.method || (isReq ? input.method : "GET")).toUpperCase();
+      // SCAN-BODY-SHIM-V1: older panels (ModuleShell, mobile/malware/etc.)
+      // POST scan bodies directly with fetch and never called
+      // _applyScanConsent, so they sent no authorization_ack and no
+      // profile_id -> refused on customer targets / no scope enforcement.
+      // Any JSON body to our API that carries a string `target` is a scan
+      // body; fill in consent + engagement profile (only missing fields).
+      if (method === "POST" && typeof o.body === "string" && o.body.charAt(0) === "{" &&
+          o.body.indexOf('"target"') !== -1) {
+        try {
+          const b = JSON.parse(o.body);
+          if (b && typeof b === "object" && !Array.isArray(b) && typeof b.target === "string" && b.target) {
+            const before = b.authorization_ack !== undefined && b.profile_id !== undefined;
+            if (!before) { _applyScanConsent(b); o.body = JSON.stringify(b); }
+          }
+        } catch (_) {}
+      }
       if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && !h.has("X-CSRF-Token")) {
         const t = vlCsrfToken();
         if (t) h.set("X-CSRF-Token", t);
@@ -643,9 +659,13 @@ function vlProfilesChanged() {
   _vlProfilesPromise = null;
   try { window.dispatchEvent(new CustomEvent("vl:profilesListChanged")); } catch (_) {}
 }
-// Report branding: the profile used by the most recent scan (null = that scan
-// ran without a profile, so reports stay VulnusLab-branded).
+// Report branding: the profile each TARGET was last scanned under (null = that
+// scan ran without a profile, so its report stays VulnusLab-branded).
+// BRANDING-PER-SCAN-V1: keyed by target host so a report for target A is never
+// branded with the profile of a later scan of target B in another panel.
+// _vlLastScanProfile remains as the fallback for reports with no target.
 let _vlLastScanProfile = null;
+const _vlScanProfileByHost = {};
 const _vlLogoCache = {};
 function vlLoadProfileLogo(id, force) {
   if (!id) return Promise.resolve(null);
@@ -667,8 +687,13 @@ function vlLoadProfileLogo(id, force) {
     }) : null)
     .catch(() => null);
 }
-function vlReportBranding() {
-  const p = _vlLastScanProfile;
+function vlReportBranding(target) {
+  let p = _vlLastScanProfile;
+  if (target) {
+    let h = "";
+    try { h = vlAuthHost(target); } catch (_) {}
+    if (h && Object.prototype.hasOwnProperty.call(_vlScanProfileByHost, h)) p = _vlScanProfileByHost[h];
+  }
   if (!p || !p.id) return null;
   return {
     company: p.company || "", profileName: p.name || "", profileId: p.id,
@@ -679,6 +704,10 @@ function vlReportBranding() {
 function _vlApplyProfile(body) {
   const p = vlGetActiveProfile();
   _vlLastScanProfile = p;
+  try {
+    const h = body && typeof body === "object" && body.target ? vlAuthHost(body.target) : "";
+    if (h) _vlScanProfileByHost[h] = p;
+  } catch (_) {}
   if (!p || !body || typeof body !== "object" || body.profile_id !== undefined) return;
   body.profile_id = p.id;
   if (p.role === VL_UNAUTH_ROLE) body.auth_mode = "unauthenticated";
@@ -1119,7 +1148,7 @@ function LandingPage({onStart, onSignIn}) {
       {/* Hero */}
       <div style={{...container, display:"grid", gridTemplateColumns:"1.05fr 0.95fr", gap:36, alignItems:"center", padding:"64px 24px 44px"}}>
         <div>
-          <div style={{display:"inline-block", fontSize:11, letterSpacing:2, textTransform:"uppercase", color:"var(--vl-60a5fa)", border:"1px solid var(--vl-1e3a8a)", borderRadius:999, padding:"5px 14px", marginBottom:20}}>Professional Penetration Testing Platform</div>
+          <div style={{display:"inline-block", fontSize:11, letterSpacing:2, textTransform:"uppercase", color:"var(--vl-60a5fa)", border:"1px solid var(--vl-1e3a8a)", borderRadius:999, padding:"5px 14px", marginBottom:20}}>Automated Vulnerability Assessment Platform</div>
           <h1 style={{fontSize:46, lineHeight:1.07, fontWeight:900, margin:"0 0 18px", letterSpacing:-1}}>Scan Any Target<br/><span style={{color:C.accent}}>With 51 Real Tools</span></h1>
           <p style={{fontSize:16, lineHeight:1.6, color:C.muted, maxWidth:520, margin:"0 0 26px"}}>No installation. No setup. Enter a target URL and run all 51 Kali Linux security tools with one click. Get a professional PDF report in minutes.</p>
           <div style={{display:"flex", gap:14, flexWrap:"wrap"}}>
@@ -1350,7 +1379,7 @@ function LandingPage({onStart, onSignIn}) {
         <div style={{...container, display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:24}}>
           <div>
             <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:10}}><img src={LOGO} alt="" style={{width:28, height:28}}/><span style={{fontSize:15, fontWeight:900, letterSpacing:2}}>VULNUSLAB</span></div>
-            <div style={{fontSize:12.5, lineHeight:1.6, color:C.muted, maxWidth:300}}>Professional penetration testing platform powered by Kali Linux. 51 real security tools in one cloud dashboard.</div>
+            <div style={{fontSize:12.5, lineHeight:1.6, color:C.muted, maxWidth:300}}>Automated vulnerability assessment platform powered by Kali Linux. 51 real security tools in one cloud dashboard.</div>
             <div style={{marginTop:14}}><Tagline size={8}/></div>
           </div>
           <div>
@@ -4900,7 +4929,7 @@ function WebAppModule(props) {
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
           <span style={{fontSize:20}}></span>
-          <h2 style={{fontSize:16,fontWeight:700,color:"var(--heading)",margin:0}}>Web Application Penetration Testing</h2>
+          <h2 style={{fontSize:16,fontWeight:700,color:"var(--heading)",margin:0}}>Web Application Security Assessment</h2>
           <Badge label={PHASES.length+" PHASES"} color="blue"/>
           <Badge label="REAL TOOLS" color="green"/>
           {running && <Badge label="LIVE SCAN" color="blue"/>}
@@ -14194,7 +14223,7 @@ function generateUniversalVLReport(opts) {
   const pdfConfig      = opts.pdfConfig || {};
   // TARGET-PROFILE-UI-V1: customer branding from the engagement profile the
   // scan ran under (null when the scan used no profile -> VulnusLab only).
-  const _brand         = opts.branding !== undefined ? opts.branding : vlReportBranding();
+  const _brand         = opts.branding !== undefined ? opts.branding : vlReportBranding(target);
   const moduleKey      = opts.moduleKey      || "module";
   const moduleLabel    = opts.moduleLabel    || "Security Assessment";
   const moduleTitle    = opts.moduleTitle    || (moduleLabel + " REPORT").toUpperCase();
@@ -21262,10 +21291,10 @@ const MODULE_INPUT_SCHEMAS = {
   hybrid_identity: { ph: "yourtenant.onmicrosoft.com", hint: "Entra ID tenant or domain" },
   sspm:            { ph: "https://yourorg.salesforce.com", hint: "SaaS instance URL (Salesforce/Slack/Box/M365)" },
   iot_ot:          { ph: "192.168.1.50:502 (Modbus default port)", hint: "IoT/OT device IP:port" },
-  firmware:        { ph: "/path/to/firmware.bin or http://fw-host/img.bin", hint: "Firmware binary path or URL" },
+  firmware:        { ph: "Upload a firmware image (.bin / .img / .trx) — path fills in here", hint: "Upload the firmware image below; scans run on the uploaded copy", needsUpload: true, uploadUrl: "/api/firmware/upload", uploadField: "path", accept: ".bin,.img,.trx,.chk,.fw,.rom,.hex,.zip,.tar,.gz,.squashfs,.ubi" },
   phishing:        { ph: "example.com", hint: "Target domain for phishing-surface audit" },
   red_team:        { ph: "example.com or corp.local", hint: "Engagement scope (domain / network)" },
-  mobile_static:   { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Upload APK/IPA via POST /api/mobile_static/upload first, then paste returned apk_path", needsUpload: true },
+  mobile_static:   { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Upload the APK/IPA below; the path fills in automatically", needsUpload: true, uploadUrl: "/api/mobile_static/upload", uploadField: "apk_path", accept: ".apk,.ipa,.aab,.jar" },
   mobile_storage:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
   mobile_runtime:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
   mobile_crypto:   { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
@@ -21577,6 +21606,7 @@ const MODULE_TEST_TARGETS = {
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
   const schema = MODULE_INPUT_SCHEMAS[moduleKey] || { ph: "Target", hint: "Target value" };
   const [target,    setTarget]    = useState("");
+  const [fwUpload,  setFwUpload]  = useState({busy:false, msg:""});   // FIRMWARE-UPLOAD-V1
   const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
   const [authCookie,setAuthCookie]= useState("");   // optional: session cookie (webapp / auth_attacks)
   // AUTH-SCOPE-V1: once auth has been used against a host, changing the
@@ -22231,6 +22261,38 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           </span>
           {schema.hint}
         </span>
+        {schema.uploadUrl && (
+          <label style={{background:"var(--accent)", color:"#fff", borderRadius:4, padding:"3px 10px",
+                         fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5,
+                         cursor: (fwUpload.busy || running) ? "not-allowed" : "pointer",
+                         opacity: (fwUpload.busy || running) ? 0.6 : 1}}>
+            {fwUpload.busy ? "Uploading…" : "⬆ Upload file"}
+            <input type="file" accept={schema.accept || ""} style={{display:"none"}}
+              disabled={fwUpload.busy || running}
+              onChange={async (e) => {
+                const file = e.target.files && e.target.files[0];
+                e.target.value = "";
+                if (!file) return;
+                setFwUpload({busy:true, msg:`Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)…`});
+                try {
+                  const fd = new FormData(); fd.append("file", file);
+                  const r = await fetch(`${apiUrl}${schema.uploadUrl}`, {
+                    method:"POST", headers:{Authorization:`Bearer ${token}`}, body: fd, credentials:"include"});
+                  if (!r.ok) {
+                    const err = await r.json().catch(() => ({detail: r.status === 413 ? "File too large" : `HTTP ${r.status}`}));
+                    setFwUpload({busy:false, msg:`Upload failed: ${err.detail || r.statusText}`});
+                    return;
+                  }
+                  const d = await r.json();
+                  setTarget(d[schema.uploadField || "path"] || "");
+                  setFwUpload({busy:false, msg:`Uploaded ${d.filename} (${(d.size/1024/1024).toFixed(1)} MB) — ready to scan`});
+                } catch (ex) {
+                  setFwUpload({busy:false, msg:`Upload error: ${ex.message || ex}`});
+                }
+              }}/>
+          </label>
+        )}
+        {fwUpload.msg && <span style={{fontSize:11, color: /fail|error/i.test(fwUpload.msg) ? "var(--t-fca5a5, #fca5a5)" : "var(--muted)"}}>{fwUpload.msg}</span>}
         <button onClick={() => setShowAuth(!showAuth)}
           style={{background:"transparent", border:"1px solid var(--border2)",
                   borderRadius:4, padding:"3px 10px", color:"var(--muted)",
