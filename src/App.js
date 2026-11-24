@@ -9245,7 +9245,6 @@ function Dashboard(props) {
           <h2>Dashboard</h2>
           <p>{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
         </div>
-        <span className="vl-online"><i style={{background: health ? "#22c55e" : "#f59e0b"}}/>{health ? "Kali Linux live" : "Connecting…"}</span>
       </div>
       <p className="vld-note">Charts cover the scans run in this browser since you signed in.</p>
 
