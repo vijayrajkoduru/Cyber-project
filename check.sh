@@ -31,16 +31,25 @@ login_check() {
     pw=$(grep -m1 -E '^[[:space:]]*VL_ADMIN_PASSWORD=' "$(dirname "$0")/.env" | cut -d= -f2- \
          | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/')
   fi
+  local user="${VL_ADMIN_USER:-koduru}"
+  # Prefer the low-privilege smoke account (VL_SMOKE_USER/PASS in .env) so no
+  # superadmin password has to live in .env.
+  if [ -z "$pw" ] && [ -f "$(dirname "$0")/.env" ]; then
+    local su sp
+    su=$(grep -m1 -E '^VL_SMOKE_USER=' "$(dirname "$0")/.env" | cut -d= -f2-)
+    sp=$(grep -m1 -E '^VL_SMOKE_PASS=' "$(dirname "$0")/.env" | cut -d= -f2-)
+    if [ -n "$su" ] && [ -n "$sp" ]; then user="$su"; pw="$sp"; fi
+  fi
   if [ -z "$pw" ]; then
-    echo "  /api/auth/login  SKIPPED — set VL_ADMIN_PASSWORD in .env (see check.sh header)"
+    echo "  /api/auth/login  SKIPPED — set VL_SMOKE_USER/VL_SMOKE_PASS in .env (see check.sh header)"
     SKIP=$((SKIP+1)); return
   fi
   local code
-  code=$(VL_USER="${VL_ADMIN_USER:-koduru}" VL_PW="$pw" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({"username":os.environ["VL_USER"],"password":os.environ["VL_PW"]}))' \
+  code=$(VL_USER="$user" VL_PW="$pw" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({"username":os.environ["VL_USER"],"password":os.environ["VL_PW"]}))' \
          | curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST http://localhost/api/auth/login \
                 -H 'Content-Type: application/json' --data-binary @-)
   if [ "$code" = "200" ]; then echo "  /api/auth/login"; PASS=$((PASS+1))
-  else echo "  /api/auth/login  (HTTP $code — wrong VL_ADMIN_PASSWORD?)"; FAIL=$((FAIL+1)); fi
+  else echo "  /api/auth/login  (HTTP $code — wrong password for $user?)"; FAIL=$((FAIL+1)); fi
 }
 login_check
 t "frontend index"     "curl -sI -m 5 http://localhost/"                           "200|301|302"
