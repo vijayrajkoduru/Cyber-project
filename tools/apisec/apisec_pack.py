@@ -52,6 +52,190 @@ def _http_post(url: str, body: str, headers: dict | None = None, timeout: float 
         return 0, "", {}
 
 
+# ── Profile-stored OpenAPI spec (APISEC-SPEC-V1) ───────────────────
+# When the scan carries a profile_id and the customer stored an OpenAPI /
+# Swagger spec on that profile (PUT /api/profiles/{id}/openapi), the spec's
+# operations are added to what apisec tests. Spec-derived requests go through
+# `requests`, so the scope guard (scope + per-profile rate limit) applies, and
+# every URL is additionally pre-filtered against the profile scope.
+_SPEC_CACHE: dict = {}          # (profile_id, sha256, base) -> parsed result
+_SPEC_CACHE_MAX = 16
+_SPEC_PROBE_CAP = 60            # operations actually requested per probe
+_SPEC_TIMEOUT = 4.0
+
+
+def _profile_spec(req, target: str) -> dict:
+    """Load + parse the stored spec for req.profile_id. Never raises.
+    Returns {"status": loaded|no_profile|no_spec|invalid|unavailable, ...}."""
+    import hashlib
+    pid = getattr(req, "profile_id", None)
+    if not pid:
+        return {"status": "no_profile"}
+    try:
+        from tools._core import scope_guard
+        from tools._core.target_profile import get_openapi_spec
+    except Exception as e:
+        return {"status": "unavailable", "error": f"profile modules unavailable: {type(e).__name__}"}
+    ctx = scope_guard.current()
+    if ctx is None or ctx.rt.id != str(pid)[:64]:
+        return {"status": "unavailable", "error": "profile scan context not active"}
+    try:
+        text = get_openapi_spec(ctx.rt.id, ctx.rt.owner_id)
+    except Exception as e:
+        return {"status": "unavailable", "error": f"could not read stored spec: {type(e).__name__}"}
+    if not text:
+        return {"status": "no_spec"}
+    from tools.apisec import openapi_spec as oas
+    key = (ctx.rt.id, hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest(), _base_url(target))
+    hit = _SPEC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    doc, kind, err = oas.parse_spec(text)
+    if err:
+        res = {"status": "invalid", "error": err}
+    else:
+        def _allowed(url):
+            ok, _why = ctx.rt.scope.decide(url)
+            return ok
+        base, note = oas.resolve_base(doc, kind, _base_url(target), server_allowed=_allowed)
+        ops = oas.build_operations(doc, kind)
+        in_scope, out_scope = [], 0
+        for op in ops:
+            url = base + op["filled_path"]
+            try:
+                ok, _why = ctx.rt.scope.decide(url)
+            except Exception:
+                ok = False
+            if ok:
+                in_scope.append(dict(op, url=url))
+            else:
+                out_scope += 1
+        res = {"status": "loaded", **oas.summarize(doc, kind), "base_url": base,
+               "base_note": note, "operations": in_scope,
+               "total_operations": len(ops), "in_scope": len(in_scope),
+               "out_of_scope": out_scope}
+    if len(_SPEC_CACHE) >= _SPEC_CACHE_MAX:
+        _SPEC_CACHE.pop(next(iter(_SPEC_CACHE)), None)
+    _SPEC_CACHE[key] = res
+    return res
+
+
+def _spec_coverage(spec: dict, tested: int = 0) -> dict:
+    """Compact, report-friendly coverage block (no operation bodies)."""
+    out = {"source": "target_profile", "status": spec.get("status")}
+    if spec.get("status") == "loaded":
+        out.update({k: spec.get(k) for k in ("spec_kind", "spec_version", "title",
+                                             "base_url", "base_note", "total_operations",
+                                             "in_scope", "out_of_scope")})
+        out["tested"] = tested
+        out["summary"] = (f"{spec.get('in_scope', 0)} endpoints from spec "
+                          f"({spec.get('total_operations', 0)} operations, "
+                          f"{spec.get('out_of_scope', 0)} out of scope, {tested} tested)")
+    elif spec.get("error"):
+        out["error"] = spec["error"]
+    return out
+
+
+def _spec_summary_suffix(spec: dict, tested: int) -> str:
+    if spec.get("status") == "loaded":
+        return f" + {spec.get('in_scope', 0)} endpoints from spec ({tested} tested)"
+    if spec.get("status") == "invalid":
+        return " (stored OpenAPI spec could not be parsed)"
+    return ""
+
+
+def _spec_send(op: dict, timeout: float = _SPEC_TIMEOUT):
+    """Send one spec operation UNAUTHENTICATED. Returns (status, ctype, body)."""
+    import requests
+    h = {"User-Agent": "VulnusLab/2.0", "Accept": "application/json, */*"}
+    h.update(op.get("headers") or {})
+    kw = {"params": op.get("query") or None, "headers": h, "timeout": timeout,
+          "allow_redirects": False, "verify": False}
+    body, ct = op.get("body"), (op.get("content_type") or "").lower()
+    if op["method"] not in ("GET", "HEAD", "OPTIONS") and body is not None:
+        if "json" in ct or not isinstance(body, dict):
+            kw["json"] = body
+        elif "multipart" in ct:
+            kw["files"] = {k: (None, str(v)) for k, v in body.items()}
+        else:
+            kw["data"] = body
+    try:
+        r = requests.request(op["method"], op["url"], **kw)
+        return r.status_code, (r.headers.get("Content-Type") or "").lower(), r.content[:8192]
+    except Exception:
+        return 0, "", b""
+
+
+def _probe_spec_operations(target, req, spec: dict) -> tuple:
+    """Exercise in-scope spec operations. Returns (findings, raw, tested).
+
+    Safe methods (GET/HEAD/OPTIONS) are always requested; state-changing
+    methods only when the profile allows destructive tests. Requests carry NO
+    credentials, so a 2xx on an operation the spec declares as secured is a
+    broken-authentication signal (gated against a catch-all baseline)."""
+    import uuid
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        from tools._core.scope_guard import is_destructive_allowed
+        destructive_ok = is_destructive_allowed(req)
+    except Exception:
+        destructive_ok = False
+    ops = spec.get("operations") or []
+    runnable = [o for o in ops if o["method"] in ("GET", "HEAD", "OPTIONS") or destructive_ok]
+    skipped_unsafe = len(ops) - len(runnable)
+    # Secured GETs first (highest signal), then other GETs, then the rest.
+    runnable.sort(key=lambda o: (o["method"] != "GET", not o["requires_auth"]))
+    batch = runnable[:_SPEC_PROBE_CAP]
+    # Catch-all baseline: SPAs / gateways answering 200 for any path.
+    bl_status, _bl_ct, bl_body = _spec_send(
+        {"method": "GET", "url": f"{spec['base_url']}/vl-nonexistent-{uuid.uuid4().hex[:10]}"})
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        results = list(ex.map(_spec_send, batch))
+    unauth, missing, reachable, errors = [], [], [], 0
+    for op, (code, ct, body) in zip(batch, results):
+        label = f"{op['method']} {op['path']}"
+        if code == 0:
+            errors += 1
+            continue
+        if code == 404:
+            missing.append(label)
+            continue
+        reachable.append(f"{label}->{code}")
+        catch_all = (200 <= bl_status < 300) and (body == bl_body or "json" not in ct)
+        if op["requires_auth"] and 200 <= code < 300 and not catch_all \
+                and op["method"] != "OPTIONS" and (body or code == 204):
+            unauth.append(f"{label} -> {code}")
+    findings = []
+    if unauth:
+        findings.append(wrap_finding(
+            f"{len(unauth)} spec-secured endpoint(s) answered without credentials",
+            "HIGH", cvss="7.5", cwe="CWE-306",
+            remediation="Enforce the authentication the OpenAPI spec declares on every operation "
+                        "(gateway + service); confirm the response is not public data by design.",
+            evidence_marker="; ".join(unauth[:15])))
+    if missing:
+        findings.append(wrap_finding(
+            f"{len(missing)} documented endpoint(s) return 404 — spec drift or wrong base URL",
+            "INFO", cvss="0.0", cwe="CWE-1059",
+            remediation="Keep the OpenAPI spec in sync with deployed routes (API9 inventory).",
+            evidence_marker="; ".join(missing[:15])))
+    findings.append(wrap_finding(
+        f"OpenAPI spec coverage: {spec.get('in_scope', 0)} endpoints from spec, "
+        f"{len(batch)} exercised, {len(reachable)} reachable",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation="Review spec-derived results alongside discovered endpoints.",
+        evidence_marker=(f"base={spec.get('base_url')} ({spec.get('base_note')}); "
+                         f"out_of_scope={spec.get('out_of_scope', 0)}; "
+                         f"state-changing skipped={skipped_unsafe}; "
+                         f"over cap={max(0, len(runnable) - len(batch))}; errors={errors}")))
+    raw = {"spec_unauthenticated": unauth, "spec_missing": missing[:50],
+           "spec_reachable": reachable[:100], "spec_errors": errors,
+           "spec_state_changing_skipped": skipped_unsafe,
+           "spec_destructive_allowed": destructive_ok,
+           "spec_baseline_status": bl_status}
+    return findings, raw, len(batch)
+
+
 def _probe_openapi_swagger(target, req):
     """Check for exposed OpenAPI/Swagger spec at common paths."""
     base = _base_url(target)
@@ -82,12 +266,29 @@ def _probe_openapi_swagger(target, req):
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue documentation-not-public posture.",
             evidence_marker=f"Tested {len(paths)} paths"))
-    return {"tool":"openapi_swagger_discovery","target":target,"scan_time":0,
-            "vulnerable": bool(found),
-            "severity": findings[0].get("severity","INFO"),
-            "findings": findings, "tests_performed": len(paths),
-            "tests_summary": f"OpenAPI/Swagger discovery — {len(paths)} paths probed",
-            "raw_data": {"found": found}}
+    spec = _profile_spec(req, target)
+    if spec.get("status") == "loaded":
+        findings.append(wrap_finding(
+            f"Stored OpenAPI spec loaded from target profile — {spec['in_scope']} endpoints from spec",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Spec operations are exercised by the API endpoint tests.",
+            evidence_marker=_spec_coverage(spec)["summary"] + f"; base={spec['base_url']}"))
+    elif spec.get("status") == "invalid":
+        findings.append(wrap_finding(
+            "Stored OpenAPI spec on the target profile could not be parsed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Re-upload a valid OpenAPI 3.x or Swagger 2.0 document (JSON or YAML).",
+            evidence_marker=str(spec.get("error", ""))[:300]))
+    out = {"tool":"openapi_swagger_discovery","target":target,"scan_time":0,
+           "vulnerable": bool(found),
+           "severity": findings[0].get("severity","INFO"),
+           "findings": findings, "tests_performed": len(paths),
+           "tests_summary": f"OpenAPI/Swagger discovery — {len(paths)} paths probed"
+                            + _spec_summary_suffix(spec, 0),
+           "raw_data": {"found": found}}
+    if spec.get("status") != "no_profile":
+        out["spec_coverage"] = _spec_coverage(spec)
+    return out
 
 
 def _probe_openapi_exposed(target, req):
@@ -188,7 +389,8 @@ def _probe_grpc_reflection(target, req):
 
 
 def _probe_api_endpoint_brute(target, req):
-    """Brute common API endpoints."""
+    """Brute common API endpoints + exercise operations from the profile's
+    stored OpenAPI spec (APISEC-SPEC-V1)."""
     base = _base_url(target)
     paths = ["/api", "/api/v1", "/api/v2", "/v1", "/v2", "/rest", "/graphql",
               "/admin", "/api/admin", "/api/internal", "/api/private"]
@@ -197,30 +399,41 @@ def _probe_api_endpoint_brute(target, req):
         code, body, _ = _http_get(base + p, timeout=3)
         if code in (200, 401, 403):
             found.append({"path": p, "code": code})
+    findings, raw = [], {"found": found}
     if found:
-        return {"tool":"api_endpoint_brute","target":target,"scan_time":0,
-                "vulnerable": any(f["code"] == 200 for f in found),
-                "severity": "MEDIUM" if any(f["code"] == 200 for f in found) else "INFO",
-                "findings":[wrap_finding(
-                    f"API endpoints discovered: {len(found)}",
-                    "MEDIUM" if any(f["code"] == 200 for f in found) else "INFO",
-                    cvss="5.0" if any(f["code"] == 200 for f in found) else "0.0",
-                    cwe="CWE-200",
-                    remediation="Inventory all API paths; require auth on /admin and /internal.",
-                    evidence_marker=", ".join(f"{f['path']}→{f['code']}" for f in found))],
-                "tests_performed": len(paths),
-                "tests_summary": f"API endpoint brute — {len(paths)} paths",
-                "raw_data": {"found": found}}
-    return {"tool":"api_endpoint_brute","target":target,"scan_time":0,
-            "vulnerable": False, "severity": "POSITIVE",
-            "findings":[wrap_finding(
-                "No standard API paths exposed",
-                "POSITIVE", cvss="0.0", cwe="N/A",
-                remediation="Continue clean URL structure.",
-                evidence_marker="All standard /api/* paths returned 404")],
-            "tests_performed": len(paths),
-            "tests_summary": "API endpoint brute",
-            "raw_data": {}}
+        any200 = any(f["code"] == 200 for f in found)
+        findings.append(wrap_finding(
+            f"API endpoints discovered: {len(found)}",
+            "MEDIUM" if any200 else "INFO",
+            cvss="5.0" if any200 else "0.0",
+            cwe="CWE-200",
+            remediation="Inventory all API paths; require auth on /admin and /internal.",
+            evidence_marker=", ".join(f"{f['path']}→{f['code']}" for f in found)))
+    spec = _profile_spec(req, target)
+    spec_tested = 0
+    if spec.get("status") == "loaded" and spec.get("operations"):
+        sf, sraw, spec_tested = _probe_spec_operations(target, req, spec)
+        findings += sf
+        raw.update(sraw)
+    if not findings:
+        findings.append(wrap_finding(
+            "No standard API paths exposed",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue clean URL structure.",
+            evidence_marker="All standard /api/* paths returned 404"))
+    _rank = {"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFO": 1, "POSITIVE": 0}
+    findings.sort(key=lambda f: -_rank.get(f.get("severity", "INFO"), 1))
+    out = {"tool":"api_endpoint_brute","target":target,"scan_time":0,
+           "vulnerable": any(f.get("severity") in ("CRITICAL", "HIGH", "MEDIUM") for f in findings),
+           "severity": findings[0].get("severity", "INFO"),
+           "findings": findings,
+           "tests_performed": len(paths) + spec_tested,
+           "tests_summary": f"API endpoint brute — {len(paths)} paths"
+                            + _spec_summary_suffix(spec, spec_tested),
+           "raw_data": raw}
+    if spec.get("status") != "no_profile":
+        out["spec_coverage"] = _spec_coverage(spec, spec_tested)
+    return out
 
 
 def _probe_hidden_api_versions(target, req):
@@ -252,9 +465,14 @@ def _probe_rate_limit(target, req):
     """Probe API rate-limit posture by rapid-fire (10 reqs) to /api/health or /."""
     base = _base_url(target)
     paths = ["/api/health", "/health", "/api", "/"]
+    spec = _profile_spec(req, target)
+    # Documented spec GET operations are real endpoints: try up to two of
+    # them before the generic paths (APISEC-SPEC-V1).
+    spec_urls = [o["url"] for o in (spec.get("operations") or []) if o["method"] == "GET"][:2]
+    candidates = [(u, u[len(base):] if u.startswith(base) else u) for u in spec_urls] + \
+                 [(base + p, p) for p in paths]
     findings = []
-    for p in paths:
-        url = base + p
+    for url, p in candidates:
         codes = []
         import time
         start = time.time()
@@ -282,12 +500,16 @@ def _probe_rate_limit(target, req):
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Test against an actual reachable endpoint.",
             evidence_marker=f"Paths probed: {paths}"))
-    return {"tool":"rate_limit_ip_bypass","target":target,"scan_time":0,
-            "vulnerable": any(f.get("severity") == "HIGH" for f in findings),
-            "severity": findings[0].get("severity","INFO"),
-            "findings": findings, "tests_performed": 10,
-            "tests_summary": "Rate-limit rapid-fire probe (10 req burst)",
-            "raw_data": {}}
+    out = {"tool":"rate_limit_ip_bypass","target":target,"scan_time":0,
+           "vulnerable": any(f.get("severity") == "HIGH" for f in findings),
+           "severity": findings[0].get("severity","INFO"),
+           "findings": findings, "tests_performed": 10,
+           "tests_summary": "Rate-limit rapid-fire probe (10 req burst)"
+                            + _spec_summary_suffix(spec, len(spec_urls)),
+           "raw_data": {"spec_candidates": spec_urls}}
+    if spec.get("status") != "no_profile":
+        out["spec_coverage"] = _spec_coverage(spec, len(spec_urls))
+    return out
 
 
 def _probe_ws_origin(target, req):
