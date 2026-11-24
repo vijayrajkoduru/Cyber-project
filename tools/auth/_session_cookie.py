@@ -42,7 +42,9 @@ SESSION_MAX_AGE = 7 * 24 * 3600          # matches the JWT TTL (login.py TOKEN_T
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 # Unsafe-method paths that do not need the CSRF header even when a session
 # cookie is present: login/register establish a NEW session (and a stale
-# cookie must not block them); logout only clears cookies.
+# cookie must not block them). Logout clears cookies and revokes the
+# presenting user's sessions (TOKEN-REVOKE-V1); a cross-site page cannot
+# trigger that because vl_session is SameSite=Strict.
 CSRF_EXEMPT_PATHS = frozenset({
     "/api/auth/login", "/api/auth/register", "/api/auth/logout",
 })

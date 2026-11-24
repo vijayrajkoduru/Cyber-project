@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from jose import jwt
 
-from tools.auth._db import get_db, hash_password
+from tools.auth._db import get_db, hash_password, new_token_claims
 
 # Multi-tenant zone bootstrap — every new user gets a walled-off data dir.
 # Defensive import so a bug in userzone.py never blocks registration.
@@ -81,14 +81,14 @@ async def auth_register(req: RegisterRequest, request: Request, response: Respon
         except Exception as exc:
             _log.warning("init_zone failed for %s: %s", user_id, exc)
 
-    payload = {
-        "sub":      user_id,
+    # TOKEN-REVOKE-V1: new account -> token_version 0 (column default).
+    payload = new_token_claims(user_id, 0)
+    payload.update({
         "username": req.username,
         "role":     "user",
         "plan":     "trial",
-        "iat":      datetime.datetime.utcnow(),
         "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_TTL_HOURS),
-    }
+    })
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
     # Welcome email (with plan + verification link) + audit. Both best-effort —

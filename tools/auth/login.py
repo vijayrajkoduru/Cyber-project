@@ -12,7 +12,8 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from jose import jwt
 
-from tools.auth._db import get_db, verify_password, record_audit
+from tools.auth._db import (get_db, verify_password, record_audit, new_token_claims,
+                            revoke_user_sessions)
 from tools.auth._session_cookie import set_session_cookies, clear_session_cookies
 
 # Lazy zone init — covers existing users who registered before USERZONE shipped.
@@ -69,7 +70,7 @@ async def auth_login(req: LoginRequest, request: Request, response: Response):
     with get_db() as con:
         user = con.execute(
             "SELECT id, username, email, password_hash, role, plan, status, "
-            "mfa_enabled, mfa_secret "
+            "mfa_enabled, mfa_secret, token_version "
             "FROM users WHERE LOWER(username)=LOWER(?)",
             (req.username,),
         ).fetchone()
@@ -106,14 +107,15 @@ async def auth_login(req: LoginRequest, request: Request, response: Response):
 
     record_audit("auth.login", actor_id=user["id"], actor_name=user["username"], ip=_ip)
 
-    payload = {
-        "sub":      user["id"],
+    # TOKEN-REVOKE-V1: sub/ver/jti/iat — `ver` ties the token to the user's
+    # current token_version so a later bump revokes it server-side.
+    payload = new_token_claims(user["id"], user.get("token_version") or 0)
+    payload.update({
         "username": user["username"],
         "role":     user["role"],
         "plan":     user["plan"],
-        "iat":      datetime.datetime.utcnow(),
         "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_TTL_HOURS),
-    }
+    })
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
     # Ensure this user has a zone (idempotent — no-op if it already exists).
@@ -151,22 +153,38 @@ async def auth_login(req: LoginRequest, request: Request, response: Response):
 
 @router.post("/api/auth/logout")
 async def auth_logout(request: Request, response: Response):
-    """Clear the browser session cookies. Stateless JWTs cannot be revoked
-    server-side here; the cookie is what the browser loses. Idempotent and
-    unauthenticated by design (only ever removes the caller's own cookies)."""
+    """Clear the browser session cookies AND revoke the session server-side
+    (TOKEN-REVOKE-V1): if the presented JWT (cookie or Bearer) is valid and
+    still current, bump the user's token_version, which invalidates EVERY
+    outstanding token for that user ("log out everywhere"). The bump is a
+    compare-and-swap on the token's own `ver`, so an already-revoked token
+    cannot re-trigger it. Idempotent; always 200 so a stale/garbage cookie
+    can still be cleared."""
     clear_session_cookies(response, request)
+    revoked = False
     try:
         from tools._shared import JWT_SECRET as _sec
-        from tools.auth._session_cookie import SESSION_COOKIE
+        from tools.auth._session_cookie import SESSION_COOKIE, real_bearer
         from jose import jwt as _j
-        raw = request.cookies.get(SESSION_COOKIE)
+        # main.py's cookie middleware turns the vl_session cookie into a
+        # Bearer header, so check the header first, then the raw cookie.
+        raw = real_bearer(request.headers.get("authorization")) \
+            or request.cookies.get(SESSION_COOKIE)
         if raw:
             p = _j.decode(raw, _sec, algorithms=["HS256"])
+            sub = p.get("sub")
             _ip = request.client.host if request and request.client else None
-            record_audit("auth.logout", actor_id=p.get("sub"), actor_name=p.get("username"), ip=_ip)
+            if sub:
+                try:
+                    ver = int(p.get("ver") or 0)
+                    revoked = revoke_user_sessions(sub, expected_version=ver) is not None
+                except Exception as exc:
+                    _log.warning("logout revocation failed for %s: %s", sub, exc)
+            record_audit("auth.logout", actor_id=sub, actor_name=p.get("username"), ip=_ip,
+                         detail="sessions revoked" if revoked else "cookie cleared")
     except Exception:
         pass
-    return {"ok": True}
+    return {"ok": True, "revoked": revoked}
 
 
 def register(app):

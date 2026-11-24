@@ -188,6 +188,15 @@ _SCHEMA_DDL = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_billpay_user ON billing_payments(user_id)",
+    # ── Server-side session revocation (TOKEN-REVOKE-V1). Every JWT carries
+    # the user's token_version as the `ver` claim; verify_token rejects a
+    # token whose ver != the live column. Bumping the column revokes every
+    # outstanding token for that user. Tokens minted before this shipped
+    # have no `ver` claim and are treated as ver=0, which matches the
+    # DEFAULT, so deploying this does not log anyone out. Constant DEFAULT
+    # -> metadata-only ALTER on Postgres 11+ (no table rewrite). Lookup is
+    # by users.id (PRIMARY KEY) so no extra index is needed.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
 ]
 
 # Org role hierarchy — higher number = more privilege.
@@ -255,10 +264,105 @@ def get_user_by_id(user_id: str):
         return None
     with get_db() as con:
         return con.execute(
-            "SELECT id, username, email, role, plan, status, plan_expires_at "
-            "FROM users WHERE id=?",
+            "SELECT id, username, email, role, plan, status, plan_expires_at, "
+            "token_version FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
+
+
+# ── Session revocation (TOKEN-REVOKE-V1) ────────────────────────────
+# Plan ordering used to decide whether a plan change is a DEMOTION (which
+# revokes sessions). Unknown plans rank lowest.
+PLAN_RANK = {"trial": 0, "pro": 1, "team": 2, "enterprise": 3,
+             "unlimited": 4, "superadmin": 5}
+_ROLE_RANK = {"superadmin": 2, "admin": 1}
+
+
+def is_plan_demotion(old_plan, new_plan) -> bool:
+    return PLAN_RANK.get(new_plan or "", 0) < PLAN_RANK.get(old_plan or "", 0)
+
+
+def forget_cached_user(user_id) -> None:
+    """Drop this process's cached auth row so revocation is immediate in this
+    worker (other workers converge within verify_token's cache TTL, <=30s)."""
+    if not user_id:
+        return
+    try:
+        from tools._shared import _user_row_cache
+        _user_row_cache.pop(user_id, None)
+    except Exception:
+        pass
+
+
+def get_token_version(user_id: str) -> int:
+    """Current token_version for a user (0 if unknown / no row)."""
+    if not user_id:
+        return 0
+    with get_db() as con:
+        row = con.execute("SELECT token_version FROM users WHERE id=?",
+                          (user_id,)).fetchone()
+    return int((row or {}).get("token_version") or 0)
+
+
+def revoke_user_sessions(user_id: str, *, expected_version=None, con=None):
+    """Invalidate every outstanding JWT for `user_id` by bumping
+    users.token_version. Returns the new version, or None if no row was
+    updated (unknown user, or `expected_version` given and already stale --
+    a compare-and-swap so an already-revoked token cannot trigger another
+    log-out-everywhere). Pass `con` to bump inside the caller's transaction."""
+    if not user_id:
+        return None
+    sql = "UPDATE users SET token_version = token_version + 1 WHERE id=?"
+    params = [user_id]
+    if expected_version is not None:
+        sql += " AND token_version=?"
+        params.append(int(expected_version))
+    sql += " RETURNING token_version"
+    if con is not None:
+        row = con.execute(sql, tuple(params)).fetchone()
+    else:
+        with get_db() as c:
+            row = c.execute(sql, tuple(params)).fetchone()
+    forget_cached_user(user_id)
+    return int(row["token_version"]) if row else None
+
+
+def set_user_password(user_id: str, plain: str) -> bool:
+    """Change a user's password AND revoke all their sessions atomically.
+    Any password change/reset endpoint must use this, not a bare UPDATE."""
+    with get_db() as con:
+        r = con.execute(
+            "UPDATE users SET password_hash=?, token_version = token_version + 1, "
+            "updated_at=? WHERE id=?",
+            (hash_password(plain), datetime.datetime.utcnow().isoformat() + "Z", user_id))
+        ok = r.rowcount > 0
+    forget_cached_user(user_id)
+    return ok
+
+
+def set_user_role(user_id: str, role: str) -> bool:
+    """Change a user's global role; revokes sessions on a demotion
+    (superadmin > admin > everything else)."""
+    with get_db() as con:
+        row = con.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not row:
+            return False
+        bump = 1 if _ROLE_RANK.get(role, 0) < _ROLE_RANK.get(row["role"], 0) else 0
+        con.execute("UPDATE users SET role=?, token_version = token_version + ? WHERE id=?",
+                    (role, bump, user_id))
+    forget_cached_user(user_id)
+    return True
+
+
+def new_token_claims(user_id: str, token_version: int = 0) -> dict:
+    """Identity + revocation claims for a freshly minted JWT: `ver` (checked
+    against users.token_version on every request), a unique `jti`, `iat`."""
+    return {
+        "sub": user_id,
+        "ver": int(token_version or 0),
+        "jti": uuid.uuid4().hex,
+        "iat": datetime.datetime.utcnow(),
+    }
 
 
 def get_scan_usage(user_id: str) -> int:

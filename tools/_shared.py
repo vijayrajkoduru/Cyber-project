@@ -305,7 +305,9 @@ def _auth_headers_of(req) -> dict:
 # SQLite during a fan-out (one orchestrator scan -> dozens of internal calls,
 # all the same sub). TTL is small so suspend/role/plan changes take effect
 # within seconds, not the 7-day token lifetime. Tests set TTL=0 for determinism.
-_AUTH_CACHE_TTL = float(os.getenv("VL_AUTH_CACHE_TTL", "15"))
+# Capped at 30s: this TTL is also the worst-case delay for session
+# revocation (token_version bump) to reach other worker processes.
+_AUTH_CACHE_TTL = min(float(os.getenv("VL_AUTH_CACHE_TTL", "15")), 30.0)
 _user_row_cache: dict = {}
 
 
@@ -382,6 +384,16 @@ def verify_token(request: Request, creds: HTTPAuthorizationCredentials = Depends
     else:
         if row.get("status") != "active":
             raise HTTPException(403, f"Account is {row.get('status')}")
+        # TOKEN-REVOKE-V1: the token's `ver` must equal the live
+        # users.token_version. Tokens minted before revocation shipped carry
+        # no `ver` and count as 0 (the column default), so they keep working
+        # until expiry unless the user's sessions have since been revoked.
+        try:
+            tok_ver = int(payload.get("ver") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(401, "Invalid token: bad version claim")
+        if tok_ver != int(row.get("token_version") or 0):
+            raise HTTPException(401, "Session has been revoked; please sign in again")
         # Authoritative live values override token claims.
         payload["role"] = row.get("role", payload.get("role"))
         payload["plan"] = row.get("plan", payload.get("plan"))

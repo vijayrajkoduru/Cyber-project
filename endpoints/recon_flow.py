@@ -28,10 +28,19 @@ _FANOUT_TOKEN = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal")
 def _service_headers(user_id: str) -> dict:
     if not user_id or not _JWT_SECRET:
         return {}
-    tok = _jose_jwt.encode(
-        {"sub": user_id, "role": "user",
-         "exp": _dt.datetime.utcnow() + _dt.timedelta(hours=1)},
-        _JWT_SECRET, algorithm="HS256")
+    # TOKEN-REVOKE-V1: carry the owner's current token_version, otherwise a
+    # user who has ever logged out (ver >= 1) would get 401 on every
+    # scheduled/batch run. A revoked user's schedule keeps working with a
+    # fresh token, but a suspended/deleted user still fails verify_token.
+    claims = {"sub": user_id}
+    try:
+        from tools.auth._db import new_token_claims, get_token_version
+        claims = new_token_claims(user_id, get_token_version(user_id))
+    except Exception:
+        pass
+    claims.update({"role": "user",
+                   "exp": _dt.datetime.utcnow() + _dt.timedelta(hours=1)})
+    tok = _jose_jwt.encode(claims, _JWT_SECRET, algorithm="HS256")
     return {"Authorization": f"Bearer {tok}", "x-vl-internal-fanout": _FANOUT_TOKEN}
 
 router = APIRouter()
